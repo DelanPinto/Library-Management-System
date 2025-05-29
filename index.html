@@ -538,37 +538,7 @@
                     performSearch();
                 }
             });
-        });
-
-        // Test backend connection
-        async function testBackendConnection() {
-            const statusElement = document.getElementById('connectionStatus');
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/health`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                if (response.ok) {
-                    statusElement.textContent = '✅ Connected to backend server successfully!';
-                    statusElement.classList.remove('error');
-                } else {
-                    throw new Error('Server responded with error');
-                }
-            } catch (error) {
-                statusElement.textContent = '❌ Cannot connect to backend server. Make sure server.js is running on port 3000';
-                statusElement.classList.add('error');
-                console.error('Backend connection error:', error);
-                
-                // Fallback to demo mode with sample data
-                enableDemoMode();
-            }
-        }
-
-        
+        });        
 
         // Load initial data from backend
         async function loadLibraryData() {
