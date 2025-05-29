@@ -568,38 +568,7 @@
             }
         }
 
-        // Enable demo mode with sample data
-        function enableDemoMode() {
-            const statusElement = document.getElementById('connectionStatus');
-            statusElement.textContent = '🎮 Demo Mode - Using sample data (Backend server not available)';
-            statusElement.style.background = '#fff3cd';
-            statusElement.style.borderColor = '#ffeaa7';
-            statusElement.style.color = '#856404';
-            
-            // Add some sample books for demonstration
-            libraryBooks = [
-                {
-                    id: 'demo-1',
-                    volumeInfo: {
-                        title: 'The Great Gatsby',
-                        authors: ['F. Scott Fitzgerald'],
-                        description: 'A classic American novel set in the Jazz Age.',
-                        imageLinks: { thumbnail: 'https://covers.openlibrary.org/b/id/8225261-M.jpg' }
-                    }
-                },
-                {
-                    id: 'demo-2',
-                    volumeInfo: {
-                        title: '1984',
-                        authors: ['George Orwell'],
-                        description: 'A dystopian social science fiction novel.',
-                        imageLinks: { thumbnail: 'https://covers.openlibrary.org/b/id/7222246-M.jpg' }
-                    }
-                }
-            ];
-            
-            displayLibraryBooks();
-        }
+        
 
         // Load initial data from backend
         async function loadLibraryData() {
