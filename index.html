@@ -508,244 +508,53 @@
     </div>
 
     <script>
-        // Global variables
+        // Global variables - using in-memory storage
         let currentTab = 'search';
         let currentPage = 0;
         let totalPages = 0;
         let lastSearchQuery = '';
         
-        // In-memory data storage (will be lost on page refresh since there's no backend)
-        let libraryBooks = JSON.parse(localStorage.getItem('libraryBooks') || '[]');
-        let borrowedBooks = JSON.parse(localStorage.getItem('borrowedBooks') || '[]');
+        // Backend API configuration
+        const API_BASE_URL = 'http://localhost:3000/api'; // Adjust port if different
+        
+        // In-memory data storage
+        let libraryBooks = [];
+        let borrowedBooks = [];
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
+            // Load library data
+            loadLibraryData();
+            
             // Add enter key support for search
             document.getElementById('searchInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     performSearch();
                 }
             });
-            
-            // Display initial data
-            displayLibraryBooks();
-            displayBorrowedBooks();
-        });
+        });        
 
-        // Update the performSearch function to only use Google Books API
-        async function performSearch(page = 0) {
-            const query = document.getElementById('searchInput').value.trim();
-            if (!query) {
-                alert('⚠️ Please enter a search term');
-                return;
-            }
-
-            lastSearchQuery = query;
-            currentPage = page;
-            
-            document.getElementById('loadingSpinner').style.display = 'block';
-            document.getElementById('searchResults').innerHTML = '';
-
+        // Load initial data from backend
+        async function loadLibraryData() {
             try {
-                const startIndex = page * 10;
-                const response = await fetch(
-                    `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&startIndex=${startIndex}&maxResults=10`
-                );
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
+                // Load library books
+                const libraryResponse = await fetch(`${API_BASE_URL}/library`);
+                if (libraryResponse.ok) {
+                    libraryBooks = await libraryResponse.json();
                 }
 
-                const data = await response.json();
-                document.getElementById('loadingSpinner').style.display = 'none';
-
-                if (data.items && data.items.length > 0) {
-                    displaySearchResults(data.items);
-                    totalPages = Math.ceil((data.totalItems || 0) / 10);
-                    setupPagination(data.totalItems);
-                } else {
-                    document.getElementById('searchResults').innerHTML = 
-                        '<div class="no-results">📭 No books found. Try different keywords!</div>';
+                // Load borrowed books
+                const borrowedResponse = await fetch(`${API_BASE_URL}/borrowed`);
+                if (borrowedResponse.ok) {
+                    borrowedBooks = await borrowedResponse.json();
                 }
-            } catch (error) {
-                document.getElementById('loadingSpinner').style.display = 'none';
-                console.error('Search error:', error);
-                document.getElementById('searchResults').innerHTML = `
-                    <div class="no-results">
-                        <h3>🚫 Search Error</h3>
-                        <p>Unable to search books. Please check your internet connection.</p>
-                    </div>
-                `;
-            }
-        }
 
-        // Add pagination setup function
-        function setupPagination(totalItems) {
-            const container = document.getElementById('pagination');
-            container.innerHTML = '';
-            
-            const totalPages = Math.ceil(totalItems / 10);
-            const maxVisiblePages = 5;
-            
-            let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
-            
-            if (endPage - startPage + 1 < maxVisiblePages) {
-                startPage = Math.max(0, endPage - maxVisiblePages + 1);
-            }
-            
-            // Previous button
-            if (currentPage > 0) {
-                container.innerHTML += `
-                    <button class="page-btn" onclick="performSearch(${currentPage - 1})">←</button>
-                `;
-            }
-            
-            // Page numbers
-            for (let i = startPage; i <= endPage; i++) {
-                container.innerHTML += `
-                    <button class="page-btn ${i === currentPage ? 'active' : ''}" 
-                            onclick="performSearch(${i})">${i + 1}</button>
-                `;
-            }
-            
-            // Next button
-            if (currentPage < totalPages - 1) {
-                container.innerHTML += `
-                    <button class="page-btn" onclick="performSearch(${currentPage + 1})">→</button>
-                `;
-            }
-        }
-
-        // Update library management functions to use localStorage
-        function addToLibrary(bookId) {
-            const book = findBookInSearchResults(bookId);
-            if (!book) return;
-            
-            if (isBookInLibrary(bookId)) {
-                alert('❌ This book is already in your library');
-                return;
-            }
-            
-            libraryBooks.push(book);
-            localStorage.setItem('libraryBooks', JSON.stringify(libraryBooks));
-            alert('📚 Book added to library successfully!');
-            
-            if (currentTab === 'library') {
-                displayLibraryBooks();
-            }
-        }
-
-        function removeFromLibrary(bookId) {
-            if (confirm('🗑️ Are you sure you want to remove this book from your library?')) {
-                libraryBooks = libraryBooks.filter(book => book.id !== bookId);
-                borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
-                
-                localStorage.setItem('libraryBooks', JSON.stringify(libraryBooks));
-                localStorage.setItem('borrowedBooks', JSON.stringify(borrowedBooks));
-                
-                alert('✅ Book removed from library successfully!');
+                // Update displays
                 displayLibraryBooks();
                 displayBorrowedBooks();
+            } catch (error) {
+                console.error('Error loading library data:', error);
             }
-        }
-
-        function borrowBook(bookId) {
-            if (!isBookInLibrary(bookId)) {
-                alert('❌ You must add the book to your library first');
-                return;
-            }
-            
-            if (isBookBorrowed(bookId)) {
-                alert('❌ This book is already borrowed');
-                return;
-            }
-            
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + 14);
-            
-            const borrowRecord = {
-                bookId,
-                borrowDate: new Date(),
-                dueDate
-            };
-            
-            borrowedBooks.push(borrowRecord);
-            localStorage.setItem('borrowedBooks', JSON.stringify(borrowedBooks));
-            
-            alert('📚 Book borrowed successfully! Due date: ' + dueDate.toLocaleDateString());
-            displayLibraryBooks();
-            displayBorrowedBooks();
-        }
-
-        function returnBook(bookId) {
-            borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
-            localStorage.setItem('borrowedBooks', JSON.stringify(borrowedBooks));
-            
-            alert('✅ Book returned successfully!');
-            displayLibraryBooks();
-            displayBorrowedBooks();
-        }
-
-        // Helper function to find a book in search results
-        function findBookInSearchResults(bookId) {
-            const searchResults = document.getElementById('searchResults');
-            const books = Array.from(searchResults.getElementsByClassName('book-card'))
-                .map(card => {
-                    const titleEl = card.querySelector('.book-title');
-                    const authorEl = card.querySelector('.book-author');
-                    const descEl = card.querySelector('.book-description');
-                    const imgEl = card.querySelector('.book-cover');
-                    
-                    return {
-                        id: bookId,
-                        title: titleEl.textContent,
-                        authors: [authorEl.textContent.replace('👤 ', '')],
-                        description: descEl.textContent, // Keep full description
-                        thumbnail: imgEl.src
-                    };
-                });
-            
-            return books.find(book => book.id === bookId);
-        }
-
-        // Helper functions
-        function isBookInLibrary(bookId) {
-            return libraryBooks.some(book => book.id === bookId);
-        }
-
-        function isBookBorrowed(bookId) {
-            return borrowedBooks.some(book => book.bookId === bookId);
-        }
-
-        function displayLibraryBooks() {
-            const container = document.getElementById('libraryBooks');
-            container.innerHTML = '';
-
-            if (libraryBooks.length === 0) {
-                container.innerHTML = '<div class="no-results">📚 Your library is empty. Search and add some books!</div>';
-                return;
-            }
-
-            libraryBooks.forEach(book => {
-                const bookCard = createBookCard(book, 'library');
-                container.appendChild(bookCard);
-            });
-        }
-
-        function displayBorrowedBooks() {
-            const container = document.getElementById('borrowedBooks');
-            container.innerHTML = '';
-
-            if (borrowedBooks.length === 0) {
-                container.innerHTML = '<div class="no-results">📋 You have not borrowed any books.</div>';
-                return;
-            }
-
-            borrowedBooks.forEach(book => {
-                const bookCard = createBookCard(book, 'borrowed');
-                container.appendChild(bookCard);
-            });
         }
 
         // Tab switching
@@ -769,6 +578,92 @@
             } else if (tab === 'borrowed') {
                 displayBorrowedBooks();
             }
+        }
+
+        // Main search function - renamed to avoid conflicts
+        async function performSearch(page = 0) {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                alert('⚠️ Please enter a search term');
+                return;
+            }
+
+            lastSearchQuery = query;
+            currentPage = page;
+            
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('searchResults').innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&page=${page}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                document.getElementById('loadingSpinner').style.display = 'none';
+
+                if (data.books && data.books.length > 0) {
+                    displaySearchResults(data.books);
+                    setupPagination(data.totalItems || 0);
+                } else {
+                    document.getElementById('searchResults').innerHTML = 
+                        '<div class="no-results">📭 No books found. Try different keywords!</div>';
+                }
+            } catch (error) {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                console.error('Search error:', error);
+                
+                // Fallback to Google Books API for demo
+                await searchGoogleBooks(query);
+            }
+        }
+
+        // Fallback search using Google Books API
+        async function searchGoogleBooks(query) {
+            try {
+                const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.items && data.items.length > 0) {
+                        displaySearchResults(data.items);
+                    } else {
+                        document.getElementById('searchResults').innerHTML = 
+                            '<div class="no-results">📭 No books found. Try different keywords!</div>';
+                    }
+                } else {
+                    throw new Error('Google Books API error');
+                }
+            } catch (error) {
+                console.error('Google Books search error:', error);
+                document.getElementById('searchResults').innerHTML = `
+                    <div class="no-results">
+                        <h3>🚫 Search Error</h3>
+                        <p>Unable to search books. Please check your internet connection.</p>
+                        <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                            Make sure your backend server is running for full functionality.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // Display search results
+        function displaySearchResults(books) {
+            const container = document.getElementById('searchResults');
+            container.innerHTML = '';
+
+            books.forEach(book => {
+                const bookCard = createBookCard(book, 'search');
+                container.appendChild(bookCard);
+            });
         }
 
         // Create book card element
@@ -835,13 +730,158 @@
             return card;
         }
 
+        // Library management functions
+        async function addToLibrary(bookId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/library`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ bookId })
+                });
+
+                if (response.ok) {
+                    const book = await response.json();
+                    libraryBooks.push(book);
+                    alert('📚 Book added to library successfully!');
+                    
+                    if (currentTab === 'library') {
+                        displayLibraryBooks();
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('❌ Error: ' + (error.message || 'Failed to add book'));
+                }
+            } catch (error) {
+                console.error('Error adding to library:', error);
+            }
+        }
+
+        async function removeFromLibrary(bookId) {
+            if (confirm('🗑️ Are you sure you want to remove this book from your library?')) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/library/${bookId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        libraryBooks = libraryBooks.filter(book => book.id !== bookId);
+                        borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
+                        
+                        alert('✅ Book removed from library successfully!');
+                        displayLibraryBooks();
+                        displayBorrowedBooks();
+                    } else {
+                        const error = await response.json();
+                        alert('❌ Error: ' + (error.message || 'Failed to remove book'));
+                    }
+                } catch (error) {
+                    console.error('Error removing from library:', error);
+                    libraryBooks = libraryBooks.filter(book => book.id !== bookId);
+                    borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
+                    alert('✅ Book removed from library successfully! (Demo Mode)');
+                    displayLibraryBooks();
+                    displayBorrowedBooks();
+                }
+            }
+        }
+
+        async function borrowBook(bookId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/borrow`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ bookId })
+                });
+
+                if (response.ok) {
+                    const borrowRecord = await response.json();
+                    borrowedBooks.push(borrowRecord);
+                    
+                    const dueDate = new Date(borrowRecord.dueDate).toLocaleDateString();
+                    alert('📚 Book borrowed successfully! Due date: ' + dueDate);
+                    
+                    displayLibraryBooks();
+                    displayBorrowedBooks();
+                } else {
+                    const error = await response.json();
+                    alert('❌ Error: ' + (error.message || 'Failed to borrow book'));
+                }
+            } catch (error) {
+                console.error('Error borrowing book:', error);
+            }
+        }
+
+        async function returnBook(bookId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/return/${bookId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
+                    
+                    alert('✅ Book returned successfully!');
+                    
+                    displayLibraryBooks();
+                    displayBorrowedBooks();
+                } else {
+                    const error = await response.json();
+                    alert('❌ Error: ' + (error.message || 'Failed to return book'));
+                }
+            } catch (error) {
+                console.error('Error returning book:', error);
+            }
+        }
+
         // Helper functions
+        function isBookInLibrary(bookId) {
+            return libraryBooks.some(book => book.id === bookId);
+        }
+
+        function isBookBorrowed(bookId) {
+            return borrowedBooks.some(book => book.bookId === bookId);
+        }
+
         function getBorrowDate(bookId) {
             const borrowedBook = borrowedBooks.find(book => book.bookId === bookId);
             if (borrowedBook) {
                 return new Date(borrowedBook.dueDate).toLocaleDateString();
             }
             return '';
+        }
+
+        function displayLibraryBooks() {
+            const container = document.getElementById('libraryBooks');
+            container.innerHTML = '';
+
+            if (libraryBooks.length === 0) {
+                container.innerHTML = '<div class="no-results">📚 Your library is empty. Search and add some books!</div>';
+                return;
+            }
+
+            libraryBooks.forEach(book => {
+                const bookCard = createBookCard(book, 'library');
+                container.appendChild(bookCard);
+            });
+        }
+
+        function displayBorrowedBooks() {
+            const container = document.getElementById('borrowedBooks');
+            container.innerHTML = '';
+
+            if (borrowedBooks.length === 0) {
+                container.innerHTML = '<div class="no-results">📋 You have not borrowed any books.</div>';
+                return;
+            }
+
+            borrowedBooks.forEach(book => {
+                const bookCard = createBookCard(book, 'borrowed');
+                container.appendChild(bookCard);
+            });
         }
     </script>
 </body>
