@@ -219,6 +219,7 @@
             margin-bottom: 15px;
             display: -webkit-box;
             -webkit-line-clamp: 3;
+            line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -479,10 +480,6 @@
         </div>
 
         <div class="search-section">
-            <div id="connectionStatus" class="connection-status">
-                🔗 Connecting to backend server...
-            </div>
-
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('search', event)">🔍 Search Books</div>
                 <div class="tab" onclick="switchTab('library', event)">📖 My Library</div>
@@ -526,9 +523,6 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
-            // Test backend connection
-            testBackendConnection();
-            
             // Load library data
             loadLibraryData();
             
@@ -761,19 +755,6 @@
                 }
             } catch (error) {
                 console.error('Error adding to library:', error);
-                // Demo mode fallback
-                const searchResults = document.getElementById('searchResults').children;
-                for (let card of searchResults) {
-                    if (card.innerHTML.includes(bookId)) {
-                        const bookData = extractBookDataFromCard(card);
-                        if (bookData) {
-                            libraryBooks.push({ id: bookId, volumeInfo: bookData });
-                            alert('📚 Book added to library successfully! (Demo Mode)');
-                            displayLibraryBooks();
-                            break;
-                        }
-                    }
-                }
             }
         }
 
@@ -797,7 +778,6 @@
                     }
                 } catch (error) {
                     console.error('Error removing from library:', error);
-                    // Demo mode fallback
                     libraryBooks = libraryBooks.filter(book => book.id !== bookId);
                     borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
                     alert('✅ Book removed from library successfully! (Demo Mode)');
@@ -832,17 +812,6 @@
                 }
             } catch (error) {
                 console.error('Error borrowing book:', error);
-                // Demo mode fallback
-                const dueDate = new Date();
-                dueDate.setDate(dueDate.getDate() + 14); // 2 weeks from now
-                borrowedBooks.push({
-                    bookId: bookId,
-                    borrowDate: new Date().toISOString(),
-                    dueDate: dueDate.toISOString()
-                });
-                alert('📚 Book borrowed successfully! Due date: ' + dueDate.toLocaleDateString() + ' (Demo Mode)');
-                displayLibraryBooks();
-                displayBorrowedBooks();
             }
         }
 
@@ -865,11 +834,6 @@
                 }
             } catch (error) {
                 console.error('Error returning book:', error);
-                // Demo mode fallback
-                borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
-                alert('✅ Book returned successfully! (Demo Mode)');
-                displayLibraryBooks();
-                displayBorrowedBooks();
             }
         }
 
