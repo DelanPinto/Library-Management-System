@@ -812,6 +812,17 @@
                 }
             } catch (error) {
                 console.error('Error borrowing book:', error);
+                // Demo mode fallback
+                const dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + 14); // 2 weeks from now
+                borrowedBooks.push({
+                    bookId: bookId,
+                    borrowDate: new Date().toISOString(),
+                    dueDate: dueDate.toISOString()
+                });
+                alert('📚 Book borrowed successfully! Due date: ' + dueDate.toLocaleDateString() + ' (Demo Mode)');
+                displayLibraryBooks();
+                displayBorrowedBooks();
             }
         }
 
@@ -834,6 +845,11 @@
                 }
             } catch (error) {
                 console.error('Error returning book:', error);
+                // Demo mode fallback
+                borrowedBooks = borrowedBooks.filter(book => book.bookId !== bookId);
+                alert('✅ Book returned successfully! (Demo Mode)');
+                displayLibraryBooks();
+                displayBorrowedBooks();
             }
         }
 
