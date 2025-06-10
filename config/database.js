@@ -3,22 +3,19 @@ require('dotenv').config();
 
 // Create connection pool
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '@DelanPinto0407',
-    database: process.env.DB_NAME || 'LibraryDB',
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
-// Create a direct connection (non-pool) for specific use cases
-const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '@DelanPinto0407', // <-- update this
-  database: 'LibraryDB' // <-- update this
-});
+// Debugging logs to verify environment variables
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_NAME:', process.env.DB_NAME);
 
 // Test database connection
 const testConnection = async () => {
