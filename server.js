@@ -10,8 +10,14 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
+// Debug: Log all environment variables related to ports
+console.log('Environment PORT:', process.env.PORT);
+console.log('All environment variables:', Object.keys(process.env).filter(key => key.includes('PORT')));
+
 const PORT = process.env.PORT || 3000;
 const DB_PORT = process.env.DB_PORT || 12760;
+
+console.log('Using PORT:', PORT);
 
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
