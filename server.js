@@ -636,5 +636,9 @@ async function startServer() {
   }
 }
 
+// Import and register auth routes
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 // Start the application
 startServer();
