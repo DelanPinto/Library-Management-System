@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DB_PORT = process.env.DB_PORT || 3306; // Use DB_PORT from environment variables, fallback to 3306
 
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
