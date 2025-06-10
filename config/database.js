@@ -1,9 +1,10 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-// Create connection pool
+// Connection Pool
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'yamabiko.proxy.rlwy.net',
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 56484,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || 'CFTKWWUzXBsUzfYudxWyyqRIPYLRdXOd',
     database: process.env.DB_NAME || 'railway',
@@ -12,23 +13,14 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// Create a direct connection (non-pool) for specific use cases
-const connection = mysql.createConnection({
-  host: 'yamabiko.proxy.rlwy.net',
-  user: 'root',
-  password: 'CFTKWWUzXBsUzfYudxWyyqRIPYLRdXOd',
-  database: 'railway',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 56484, // ✅ Add this
-});
-
-// Test database connection
+// Test DB connection
 const testConnection = async () => {
     try {
         const connection = await pool.getConnection();
-        console.log('Database connection successful');
+        console.log('✅ Database connection successful');
         connection.release();
     } catch (error) {
-        console.error('Database connection error:', error);
+        console.error('❌ Database connection error:', error);
         process.exit(1);
     }
 };
