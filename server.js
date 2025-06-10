@@ -11,7 +11,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_PORT = process.env.DB_PORT || 12760; // Use DB_PORT from environment variables, fallback to 3306
+const DB_PORT = process.env.DB_PORT || 12760;
 
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
@@ -23,8 +23,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rate limiting - 100 requests per 15 minutes per IP
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     error: 'Too many requests from this IP, please try again later.'
   }
@@ -38,15 +38,11 @@ app.use('/api/', (req, res, next) => {
   next();
 });
 
-// Remove Open Library API configuration
+// Open Library API configuration
 const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
 const OPEN_LIBRARY_COVERS_URL = 'https://covers.openlibrary.org/b';
 
-// Library storage (in-memory)
-// let libraryBooks = [];
-// let borrowedBooks = [];
-
-// Remove Open Library utility functions
+// Open Library utility functions
 function formatOpenLibraryResponse(works) {
   return works.map(work => ({
     id: work.key,
@@ -84,7 +80,24 @@ function formatOpenLibraryBookDetails(book) {
   };
 }
 
-// Main search endpoint (consolidated) - Now using Google Books API
+// Health check endpoint - MOVED TO TOP for Railway
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'Library Management System is running',
+    timestamp: new Date().toISOString(),
+    port: PORT
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    port: PORT
+  });
+});
+
+// Main search endpoint - with better error handling
 app.get('/api/search', async (req, res) => {
   try {
     const { q, page = 0 } = req.query;
@@ -93,16 +106,13 @@ app.get('/api/search', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter is required' });
     }
 
-    // Parse page number and handle invalid values
     let pageNum = parseInt(page);
     if (isNaN(pageNum) || pageNum < 0) {
       pageNum = 0;
     }
     
-    const startIndex = pageNum * 10; // Google Books API uses startIndex
-    const maxResults = 10; // Or a different default/configurable value
-    
-    // Create cache key
+    const startIndex = pageNum * 10;
+    const maxResults = 10;
     const cacheKey = `search_google_${q}_${startIndex}_${maxResults}`;
     
     // Check cache first
@@ -134,35 +144,36 @@ app.get('/api/search', async (req, res) => {
       console.log('Google Books API response status:', googleResponse.status);
       console.log('Google Books API response items count:', googleResponse.data.items?.length || 0);
 
-      // Format Google Books API response to match expected structure
       books = (googleResponse.data.items || []).map(item => {
-          const volumeInfo = item.volumeInfo;
-          return {
-              id: item.id, // Use Google Books Volume ID
-              title: volumeInfo?.title || 'Unknown Title',
-              authors: volumeInfo?.authors || ['Unknown Author'],
-              publishedDate: volumeInfo?.publishedDate || null,
-              description: volumeInfo?.description || null,
-              thumbnail: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
-              categories: volumeInfo?.categories || [],
-              pageCount: volumeInfo?.pageCount || null,
-              language: volumeInfo?.language || null,
-              isbn: volumeInfo?.industryIdentifiers ? volumeInfo.industryIdentifiers.find(id => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier : null,
-              publisher: volumeInfo?.publisher || null,
-              source: 'googlebooks'
-              // Note: Availability check against local DB is done in the /api/books/search endpoint
-              // This endpoint just returns raw Google Books data with basic formatting.
-          };
+        const volumeInfo = item.volumeInfo;
+        return {
+          id: item.id,
+          title: volumeInfo?.title || 'Unknown Title',
+          authors: volumeInfo?.authors || ['Unknown Author'],
+          publishedDate: volumeInfo?.publishedDate || null,
+          description: volumeInfo?.description || null,
+          thumbnail: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
+          categories: volumeInfo?.categories || [],
+          pageCount: volumeInfo?.pageCount || null,
+          language: volumeInfo?.language || null,
+          isbn: volumeInfo?.industryIdentifiers ? volumeInfo.industryIdentifiers.find(id => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier : null,
+          publisher: volumeInfo?.publisher || null,
+          source: 'googlebooks'
+        };
       });
 
       totalItems = googleResponse.data.totalItems || 0;
 
     } catch (apiError) {
       console.error('Google Books API error:', apiError.response?.data || apiError.message);
-      // Return a more informative error or an empty result set
-       return res.status(503).json({ 
-        error: 'Google Books API unavailable',
-        details: apiError.response?.data?.error?.message || apiError.message
+      // Return empty results instead of throwing error
+      return res.json({
+        books: [],
+        totalPages: 0,
+        currentPage: pageNum,
+        totalItems: 0,
+        source: 'googlebooks',
+        error: 'Google Books API temporarily unavailable'
       });
     }
 
@@ -178,7 +189,6 @@ app.get('/api/search', async (req, res) => {
     // Cache the result
     cache.set(cacheKey, result);
 
-    // Return in format expected by frontend
     res.json({
       books: result.books,
       totalPages: Math.ceil((result.totalItems || 0) / maxResults),
@@ -188,55 +198,72 @@ app.get('/api/search', async (req, res) => {
     });
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      books: [],
+      totalPages: 0,
+      currentPage: 0,
+      totalItems: 0
+    });
   }
 });
 
-// Alternative book search endpoint (for compatibility) - This endpoint is already updated in routes/books.js
-// Keep this route definition here, but the implementation is in routes/books.js
-// app.get('/api/books/search', async (req, res) => { ... }); 
-
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/books', require('./routes/books'));
-app.use('/api/users', require('./routes/users'));
+// Routes - with error handling
+try {
+  app.use('/api/auth', require('./routes/auth'));
+  app.use('/api/books', require('./routes/books'));
+  app.use('/api/users', require('./routes/users'));
+} catch (routeError) {
+  console.error('Route loading error:', routeError);
+  // Continue without these routes if they fail to load
+}
 
 // Serve static HTML files
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 app.get('/register', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+  res.sendFile(path.join(__dirname, 'public', 'register.html'));
 });
 
 app.get('/user', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'user.html'));
+  res.sendFile(path.join(__dirname, 'public', 'user.html'));
 });
 
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+// Catch-all for SPA routing
+app.get('*', (req, res) => {
+  // For API routes that don't exist
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  // For all other routes, serve index.html
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Basic error handling for unsupported routes
-app.use((req, res) => {
-    res.status(404).send('Route not found');
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start the server
-const server = app.listen(PORT, '0.0.0.0', () => {
+// Start the server with better error handling
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
-  // Test database connection on startup
-  testConnection();
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Test database connection on startup (with error handling)
+  try {
+    await testConnection();
+    console.log('Database connection test completed');
+  } catch (dbError) {
+    console.error('Database connection failed:', dbError);
+    // Don't exit - let the app run without DB if needed
+  }
 });
 
 server.on('error', (err) => {
@@ -250,19 +277,30 @@ server.on('error', (err) => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('Process terminated');
-        process.exit(0);
-    });
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+    process.exit(0);
+  });
 });
 
 process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    server.close(() => {
-        console.log('Process terminated');
-        process.exit(0);
-    });
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+    process.exit(0);
+  });
 });
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+}); 
 
 module.exports = app;
