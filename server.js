@@ -19,10 +19,7 @@ const dbConfig = {
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
   database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'library_db',
   connectTimeout: 60000,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true,
-  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false // Removed invalid options
 };
 
 let db;
