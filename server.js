@@ -37,49 +37,47 @@ app.use('/api/', (req, res, next) => {
   next();
 });
 
-// Remove Open Library API configuration
-const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
-const OPEN_LIBRARY_COVERS_URL = 'https://covers.openlibrary.org/b';
+// Google Books API configuration
+const GOOGLE_BOOKS_BASE_URL = 'https://www.googleapis.com/books/v1';
 
-// Library storage (in-memory)
-// let libraryBooks = [];
-// let borrowedBooks = [];
-
-// Remove Open Library utility functions
-function formatOpenLibraryResponse(works) {
-  return works.map(work => ({
-    id: work.key,
-    title: work.title || 'Unknown Title',
-    authors: work.author_name || ['Unknown Author'],
-    publishedDate: work.first_publish_year || null,
-    description: work.description || null,
-    thumbnail: work.cover_i ? `${OPEN_LIBRARY_COVERS_URL}/id/${work.cover_i}-M.jpg` : null,
-    categories: work.subject || [],
-    pageCount: work.number_of_pages_median || null,
-    language: work.language || null,
-    isbn: work.isbn ? work.isbn[0] : null,
-    publisher: work.publisher ? work.publisher[0] : null,
-    source: 'openlibrary'
-  }));
+// Replace Open Library utility functions
+function formatGoogleBooksResponse(items) {
+  return items.map(item => {
+    const volumeInfo = item.volumeInfo;
+    return {
+      id: item.id,
+      title: volumeInfo.title || 'Unknown Title',
+      authors: volumeInfo.authors || ['Unknown Author'],
+      publishedDate: volumeInfo.publishedDate || null,
+      description: volumeInfo.description || null,
+      thumbnail: volumeInfo.imageLinks ? volumeInfo.imageLinks.thumbnail : null,
+      categories: volumeInfo.categories || [],
+      pageCount: volumeInfo.pageCount || null,
+      language: volumeInfo.language || null,
+      isbn: volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0].identifier : null,
+      publisher: volumeInfo.publisher || null,
+      source: 'googlebooks'
+    };
+  });
 }
 
-function formatOpenLibraryBookDetails(book) {
+function formatGoogleBooksDetails(volumeInfo) {
   return {
-    id: book.key,
-    title: book.title || 'Unknown Title',
-    authors: book.authors ? book.authors.map(a => a.name) : ['Unknown Author'],
-    publishedDate: book.first_publish_date || null,
-    description: book.description || null,
-    thumbnail: book.covers ? `${OPEN_LIBRARY_COVERS_URL}/id/${book.covers[0]}-M.jpg` : null,
-    smallThumbnail: book.covers ? `${OPEN_LIBRARY_COVERS_URL}/id/${book.covers[0]}-S.jpg` : null,
-    categories: book.subjects || [],
-    pageCount: book.number_of_pages || null,
-    language: book.languages ? book.languages[0].key : null,
-    isbn: book.isbn_13 ? book.isbn_13[0] : (book.isbn_10 ? book.isbn_10[0] : null),
-    publisher: book.publishers ? book.publishers[0].name : null,
-    previewLink: book.preview_url || null,
-    infoLink: `${OPEN_LIBRARY_BASE_URL}${book.key}`,
-    source: 'openlibrary'
+    id: volumeInfo.id,
+    title: volumeInfo.title || 'Unknown Title',
+    authors: volumeInfo.authors || ['Unknown Author'],
+    publishedDate: volumeInfo.publishedDate || null,
+    description: volumeInfo.description || null,
+    thumbnail: volumeInfo.imageLinks ? volumeInfo.imageLinks.thumbnail : null,
+    smallThumbnail: volumeInfo.imageLinks ? volumeInfo.imageLinks.smallThumbnail : null,
+    categories: volumeInfo.categories || [],
+    pageCount: volumeInfo.pageCount || null,
+    language: volumeInfo.language || null,
+    isbn: volumeInfo.industryIdentifiers ? volumeInfo.industryIdentifiers[0].identifier : null,
+    publisher: volumeInfo.publisher || null,
+    previewLink: volumeInfo.previewLink || null,
+    infoLink: volumeInfo.infoLink || null,
+    source: 'googlebooks'
   };
 }
 
