@@ -11,6 +11,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3306;
 
+// Enable trust proxy for rate limiting and proxy support
+app.set('trust proxy', 1);
+
 // Initialize cache
 const cache = new NodeCache({ stdTTL: 3600 });
 
