@@ -1,388 +1,421 @@
-// Fixed server.js for Railway deployment
 const express = require('express');
-const axios = require('axios');
+const mysql = require('mysql2/promise');
 const cors = require('cors');
-const bodyParser = require('body-parser');
-const rateLimit = require('express-rate-limit');
-const NodeCache = require('node-cache');
 const path = require('path');
 require('dotenv').config();
 
 const app = express();
 
-// Railway-specific configuration
-const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0';
+// Configuration
+const PORT = process.env.PORT || 8080;
+const HOST = process.env.HOST || '0.0.0.0';
+const NODE_ENV = process.env.NODE_ENV || 'production';
 
-console.log('🚂 Railway Deployment Starting...');
-console.log('PORT:', PORT);
-console.log('HOST:', HOST);
-console.log('NODE_ENV:', process.env.NODE_ENV);
+// Database configuration with Railway environment variables
+const dbConfig = {
+  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'library_db',
+  connectTimeout: 60000,
+  acquireTimeout: 60000,
+  timeout: 60000,
+  reconnect: true,
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+};
 
-// Initialize cache with 1 hour TTL
-const cache = new NodeCache({ stdTTL: 3600 });
+let db;
+let server;
 
-// Trust proxy - IMPORTANT for Railway
-app.set('trust proxy', true);
-
-// Middleware - Order matters!
+// Middleware
 app.use(cors({
   origin: true,
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rate limiting - applied only to API routes
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// CRITICAL: Health check endpoints FIRST - no middleware interference
+// Health check endpoint (critical for Railway)
 app.get('/health', (req, res) => {
   res.status(200).json({ 
-    status: 'healthy',
+    status: 'healthy', 
     timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-    port: PORT,
-    env: process.env.NODE_ENV || 'production'
+    env: NODE_ENV,
+    port: PORT
   });
 });
 
+// Root endpoint
 app.get('/', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK',
-    message: 'Library Management System is running on Railway',
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    uptime: Math.floor(process.uptime()),
-    environment: process.env.NODE_ENV || 'production'
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Apply rate limiting only to API routes
-app.use('/api/', limiter);
+// Database connection function with retry logic
+async function connectToDatabase() {
+  const maxRetries = 5;
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    try {
+      console.log(`🔄 Attempting database connection (attempt ${retries + 1}/${maxRetries})...`);
+      
+      db = await mysql.createConnection(dbConfig);
+      
+      // Test the connection
+      await db.execute('SELECT 1');
+      
+      console.log('✅ Database connected successfully');
+      
+      // Create tables if they don't exist
+      await initializeDatabase();
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ Database connection failed (attempt ${retries + 1}):`, error.message);
+      retries++;
+      
+      if (retries < maxRetries) {
+        console.log(`⏳ Retrying in 3 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+  }
+  
+  console.error('❌ Failed to connect to database after all retries');
+  return false;
+}
 
-// Request logging for API routes only
-app.use('/api/', (req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} from ${req.ip}`);
-  next();
-});
-
-// Google Books API search endpoint
-app.get('/api/search', async (req, res) => {
+// Initialize database tables
+async function initializeDatabase() {
   try {
-    const { q, page = 0 } = req.query;
-    
-    if (!q || q.trim() === '') {
-      return res.status(400).json({ error: 'Query parameter is required' });
-    }
+    // Create books table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS books (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        author VARCHAR(255) NOT NULL,
+        isbn VARCHAR(20) UNIQUE,
+        category VARCHAR(100),
+        copies INT DEFAULT 1,
+        available INT DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
 
-    let pageNum = parseInt(page);
-    if (isNaN(pageNum) || pageNum < 0) {
-      pageNum = 0;
-    }
-    
-    const startIndex = pageNum * 10;
-    const maxResults = 10;
-    const cacheKey = `search_${q}_${startIndex}`;
-    
-    // Check cache first
-    const cachedResult = cache.get(cacheKey);
-    if (cachedResult) {
-      return res.json({
-        ...cachedResult,
-        fromCache: true
-      });
-    }
+    // Create members table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS members (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        address TEXT,
+        membership_date DATE DEFAULT (CURRENT_DATE),
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
 
-    // Call Google Books API with shorter timeout for Railway
-    const googleResponse = await axios.get('https://www.googleapis.com/books/v1/volumes', {
-      params: {
-        q: q,
-        startIndex: startIndex,
-        maxResults: maxResults
-      },
-      timeout: 5000 // Shorter timeout for Railway
-    });
+    // Create transactions table
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        book_id INT NOT NULL,
+        member_id INT NOT NULL,
+        type ENUM('issue', 'return') NOT NULL,
+        issue_date DATE,
+        due_date DATE,
+        return_date DATE,
+        fine DECIMAL(10,2) DEFAULT 0,
+        status ENUM('issued', 'returned', 'overdue') DEFAULT 'issued',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+        FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+      )
+    `);
 
-    const books = (googleResponse.data.items || []).map(item => {
-      const volumeInfo = item.volumeInfo;
-      return {
-        id: item.id,
-        title: volumeInfo?.title || 'Unknown Title',
-        authors: volumeInfo?.authors || ['Unknown Author'],
-        publishedDate: volumeInfo?.publishedDate || null,
-        description: volumeInfo?.description || null,
-        thumbnail: volumeInfo?.imageLinks?.thumbnail || null,
-        categories: volumeInfo?.categories || [],
-        pageCount: volumeInfo?.pageCount || null,
-        language: volumeInfo?.language || null,
-        isbn: volumeInfo?.industryIdentifiers ? 
-          volumeInfo.industryIdentifiers.find(id => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier : null,
-        publisher: volumeInfo?.publisher || null,
-        source: 'googlebooks'
-      };
-    });
-
-    const result = {
-      books: books,
-      totalPages: Math.ceil((googleResponse.data.totalItems || 0) / maxResults),
-      currentPage: pageNum,
-      totalItems: googleResponse.data.totalItems || 0,
-      source: 'googlebooks'
-    };
-
-    // Cache the result
-    cache.set(cacheKey, result);
-    res.json(result);
-
+    console.log('✅ Database tables initialized successfully');
   } catch (error) {
-    console.error('Search error:', error.message);
-    res.status(500).json({ 
-      error: 'Search service temporarily unavailable',
-      books: [],
-      totalPages: 0,
-      currentPage: 0,
-      totalItems: 0
-    });
+    console.error('❌ Error initializing database:', error.message);
+    throw error;
   }
-});
+}
 
-// Authentication endpoints
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: 'Email and password are required'
-    });
-  }
-  
-  // Mock authentication
-  res.json({
-    success: true,
-    message: 'Login successful',
-    user: {
-      id: 1,
-      email: email,
-      name: email.split('@')[0],
-      role: email.includes('admin') ? 'admin' : 'user'
-    },
-    token: 'mock-jwt-token-' + Date.now()
-  });
-});
-
-app.post('/api/auth/register', (req, res) => {
-  const { email, password, name } = req.body;
-  
-  if (!email || !password || !name) {
-    return res.status(400).json({
-      success: false,
-      message: 'All fields are required'
-    });
-  }
-  
-  res.json({
-    success: true,
-    message: 'Registration successful',
-    user: {
-      id: Date.now(),
-      email: email,
-      name: name,
-      role: 'user'
-    }
-  });
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Logout successful'
-  });
-});
-
-// User endpoints
-app.get('/api/users/profile', (req, res) => {
-  res.json({
-    success: true,
-    user: {
-      id: 1,
-      email: 'user@example.com',
-      name: 'Test User',
-      role: 'user',
-      joinDate: new Date().toISOString()
-    }
-  });
-});
+// API Routes
 
 // Books endpoints
-app.get('/api/books', (req, res) => {
-  res.json({
-    success: true,
-    books: [],
-    totalBooks: 0
-  });
-});
-
-app.post('/api/books', (req, res) => {
-  const { title, authors, isbn } = req.body;
-  
-  if (!title) {
-    return res.status(400).json({
-      success: false,
-      message: 'Title is required'
-    });
-  }
-  
-  res.json({
-    success: true,
-    message: 'Book added successfully',
-    book: {
-      id: Date.now(),
-      title,
-      authors: authors || [],
-      isbn: isbn || null,
-      addedDate: new Date().toISOString()
-    }
-  });
-});
-
-// Serve static HTML files
-const staticRoutes = ['/login', '/register', '/user', '/admin'];
-staticRoutes.forEach(route => {
-  app.get(route, (req, res) => {
-    const fileName = route.substring(1) + '.html';
-    const filePath = path.join(__dirname, 'public', fileName);
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error(`File not found: ${fileName}`);
-        res.status(404).send(`
-          <!DOCTYPE html>
-          <html>
-          <head><title>Page Not Found</title></head>
-          <body>
-            <h1>Page not found</h1>
-            <p>${fileName} not found in public folder</p>
-            <a href="/">Back to home</a>
-          </body>
-          </html>
-        `);
-      }
-    });
-  });
-});
-
-// API 404 handler
-app.all('/api/*', (req, res) => {
-  res.status(404).json({ 
-    error: 'API endpoint not found',
-    path: req.path,
-    method: req.method
-  });
-});
-
-// SPA fallback - catch all other routes
-app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      console.error('index.html not found');
-      res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Library Management System</title></head>
-        <body>
-          <h1>Library Management System</h1>
-          <p>Welcome to the Library Management System</p>
-          <p>API is running on Railway</p>
-        </body>
-        </html>
-      `);
-    }
-  });
-});
-
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err.message);
-  console.error('Stack:', err.stack);
-  
-  if (!res.headersSent) {
-    res.status(500).json({ 
-      error: 'Internal server error',
-      message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-    });
-  }
-});
-
-// Start server - MUST bind to 0.0.0.0 for Railway
-const server = app.listen(PORT, HOST, () => {
-  console.log(`✅ Server running on ${HOST}:${PORT}`);
-  console.log(`✅ Environment: ${process.env.NODE_ENV || 'production'}`);
-  console.log(`✅ Health check available at: /health`);
-  console.log(`✅ Ready to accept connections`);
-});
-
-// Server error handling
-server.on('error', (err) => {
-  console.error('❌ Server error:', err);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use`);
-    process.exit(1);
-  }
-});
-
-// Enhanced graceful shutdown for Railway
-const gracefulShutdown = (signal) => {
-  console.log(`📍 ${signal} received, shutting down gracefully`);
-  
-  // Stop accepting new connections
-  server.close((err) => {
-    if (err) {
-      console.error('❌ Error during server close:', err);
-      process.exit(1);
+app.get('/api/books', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
     }
     
-    console.log('📍 Server closed successfully');
-    process.exit(0);
-  });
-  
-  // Force close after 10 seconds
-  setTimeout(() => {
-    console.log('📍 Forcing shutdown after timeout');
-    process.exit(1);
-  }, 10000);
-};
+    const [rows] = await db.execute('SELECT * FROM books ORDER BY title');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching books:', error);
+    res.status(500).json({ error: 'Failed to fetch books' });
+  }
+});
 
-// Handle Railway signals
+app.post('/api/books', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { title, author, isbn, category, copies } = req.body;
+    
+    if (!title || !author) {
+      return res.status(400).json({ error: 'Title and author are required' });
+    }
+    
+    const [result] = await db.execute(
+      'INSERT INTO books (title, author, isbn, category, copies, available) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, author, isbn || null, category || null, copies || 1, copies || 1]
+    );
+    
+    res.status(201).json({ 
+      id: result.insertId,
+      message: 'Book added successfully' 
+    });
+  } catch (error) {
+    console.error('Error adding book:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      res.status(409).json({ error: 'Book with this ISBN already exists' });
+    } else {
+      res.status(500).json({ error: 'Failed to add book' });
+    }
+  }
+});
+
+// Members endpoints
+app.get('/api/members', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const [rows] = await db.execute('SELECT * FROM members ORDER BY name');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching members:', error);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+app.post('/api/members', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { name, email, phone, address } = req.body;
+    
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
+    }
+    
+    const [result] = await db.execute(
+      'INSERT INTO members (name, email, phone, address) VALUES (?, ?, ?, ?)',
+      [name, email, phone || null, address || null]
+    );
+    
+    res.status(201).json({ 
+      id: result.insertId,
+      message: 'Member added successfully' 
+    });
+  } catch (error) {
+    console.error('Error adding member:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      res.status(409).json({ error: 'Member with this email already exists' });
+    } else {
+      res.status(500).json({ error: 'Failed to add member' });
+    }
+  }
+});
+
+// Transaction endpoints
+app.get('/api/transactions', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const [rows] = await db.execute(`
+      SELECT t.*, b.title as book_title, b.author as book_author, 
+             m.name as member_name, m.email as member_email
+      FROM transactions t
+      JOIN books b ON t.book_id = b.id
+      JOIN members m ON t.member_id = m.id
+      ORDER BY t.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch transactions' });
+  }
+});
+
+app.post('/api/transactions/issue', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { book_id, member_id, due_date } = req.body;
+    
+    if (!book_id || !member_id) {
+      return res.status(400).json({ error: 'Book ID and Member ID are required' });
+    }
+    
+    // Check if book is available
+    const [bookCheck] = await db.execute(
+      'SELECT available FROM books WHERE id = ?',
+      [book_id]
+    );
+    
+    if (bookCheck.length === 0) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+    
+    if (bookCheck[0].available <= 0) {
+      return res.status(400).json({ error: 'Book not available' });
+    }
+    
+    // Start transaction
+    await db.beginTransaction();
+    
+    try {
+      // Issue the book
+      const issueDate = new Date().toISOString().split('T')[0];
+      const dueDateFormatted = due_date || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const [result] = await db.execute(
+        'INSERT INTO transactions (book_id, member_id, type, issue_date, due_date, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [book_id, member_id, 'issue', issueDate, dueDateFormatted, 'issued']
+      );
+      
+      // Update book availability
+      await db.execute(
+        'UPDATE books SET available = available - 1 WHERE id = ?',
+        [book_id]
+      );
+      
+      await db.commit();
+      
+      res.status(201).json({ 
+        id: result.insertId,
+        message: 'Book issued successfully' 
+      });
+    } catch (error) {
+      await db.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error issuing book:', error);
+    res.status(500).json({ error: 'Failed to issue book' });
+  }
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Graceful shutdown
+function gracefulShutdown(signal) {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  
+  if (server) {
+    server.close(async () => {
+      console.log('✅ HTTP server closed');
+      
+      if (db) {
+        try {
+          await db.end();
+          console.log('✅ Database connection closed');
+        } catch (error) {
+          console.error('❌ Error closing database:', error);
+        }
+      }
+      
+      console.log('✅ Graceful shutdown complete');
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+}
+
+// Handle shutdown signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught errors gracefully
-process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err.message);
-  console.error('Stack:', err.stack);
-  process.exit(1);
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  gracefulShutdown('unhandledRejection');
 });
 
-console.log('✅ Server setup complete - Railway ready');
+// Start server
+async function startServer() {
+  console.log('🚂 Railway Deployment Starting...');
+  console.log(`PORT: ${PORT}`);
+  console.log(`HOST: ${HOST}`);
+  console.log(`NODE_ENV: ${NODE_ENV}`);
+  
+  try {
+    // Connect to database first
+    const dbConnected = await connectToDatabase();
+    
+    if (!dbConnected) {
+      console.log('⚠️  Starting server without database connection');
+    }
+    
+    // Start HTTP server
+    server = app.listen(PORT, HOST, () => {
+      console.log('✅ Server setup complete - Railway ready');
+      console.log(`✅ Server running on ${HOST}:${PORT}`);
+      console.log(`✅ Environment: ${NODE_ENV}`);
+      console.log('✅ Health check available at: /health');
+      console.log('✅ Ready to accept connections');
+    });
+    
+    // Keep the process alive
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+        process.exit(1);
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
 
-module.exports = app;
+// Start the application
+startServer();
