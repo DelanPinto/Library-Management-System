@@ -1,5 +1,6 @@
-const API_BASE_URL = 'http://localhost:3000'; // Base URL for API requests
-
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'
+    : 'https://library-management-system-production-3ba6.up.railway.app';
 // Function to make authenticated API requests
 async function apiRequest(endpoint, method = 'GET', body = null) {
     const token = localStorage.getItem('token');
