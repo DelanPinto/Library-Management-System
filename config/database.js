@@ -3,10 +3,10 @@ require('dotenv').config();
 
 // Create connection pool
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST || 'yamabiko.proxy.rlwy.net',
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '@DelanPinto0407',
-    database: process.env.DB_NAME || 'LibraryDB',
+    password: process.env.DB_PASSWORD || 'CFTKWWUzXBsUzfYudxWyyqRIPYLRdXOd',
+    database: process.env.DB_NAME || 'railway',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -14,10 +14,11 @@ const pool = mysql.createPool({
 
 // Create a direct connection (non-pool) for specific use cases
 const connection = mysql.createConnection({
-  host: 'localhost',
+  host: 'yamabiko.proxy.rlwy.net',
   user: 'root',
-  password: '@DelanPinto0407', // <-- update this
-  database: 'LibraryDB' // <-- update this
+  password: 'CFTKWWUzXBsUzfYudxWyyqRIPYLRdXOd',
+  database: 'railway',
+  port: 3306,
 });
 
 // Test database connection
