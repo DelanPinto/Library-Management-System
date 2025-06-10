@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create books table
 CREATE TABLE IF NOT EXISTS books (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    open_library_id VARCHAR(255) NOT NULL UNIQUE,
+    google_books_id VARCHAR(255) NOT NULL UNIQUE,
     title VARCHAR(255) NOT NULL,
     authors JSON,
     publisher VARCHAR(255),
