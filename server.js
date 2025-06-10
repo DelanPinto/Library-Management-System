@@ -244,6 +244,95 @@ app.post('/api/members', async (req, res) => {
   }
 });
 
+// Authentication endpoints
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Username and password are required' 
+      });
+    }
+    
+    // Simple authentication - you can replace this with your actual logic
+    // For demo purposes, using hardcoded credentials
+    const validCredentials = [
+      { username: 'admin', password: 'admin123', role: 'admin' },
+      { username: 'librarian', password: 'lib123', role: 'librarian' },
+      { username: 'user', password: 'user123', role: 'user' }
+    ];
+    
+    const user = validCredentials.find(
+      cred => cred.username === username && cred.password === password
+    );
+    
+    if (user) {
+      res.json({
+        success: true,
+        message: 'Login successful',
+        user: {
+          id: Date.now(), // Simple ID generation
+          username: user.username,
+          role: user.role
+        },
+        token: `token_${Date.now()}` // Simple token generation
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid username or password'
+      });
+    }
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Login failed due to server error'
+    });
+  }
+});
+
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password, email, role } = req.body;
+    
+    if (!username || !password || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, password, and email are required'
+      });
+    }
+    
+    // For demo purposes, just return success
+    // In a real app, you'd save to a users table
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful',
+      user: {
+        id: Date.now(),
+        username,
+        email,
+        role: role || 'user'
+      }
+    });
+  } catch (error) {
+    console.error('Error during registration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Registration failed due to server error'
+    });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logout successful'
+  });
+});
+
 // Transaction endpoints
 app.get('/api/transactions', async (req, res) => {
   try {
@@ -324,6 +413,136 @@ app.post('/api/transactions/issue', async (req, res) => {
   } catch (error) {
     console.error('Error issuing book:', error);
     res.status(500).json({ error: 'Failed to issue book' });
+  }
+});
+
+app.post('/api/transactions/return', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { transaction_id, fine } = req.body;
+    
+    if (!transaction_id) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
+    
+    // Start transaction
+    await db.beginTransaction();
+    
+    try {
+      // Update transaction
+      const returnDate = new Date().toISOString().split('T')[0];
+      const [updateResult] = await db.execute(
+        'UPDATE transactions SET return_date = ?, status = ?, fine = ? WHERE id = ? AND status = ?',
+        [returnDate, 'returned', fine || 0, transaction_id, 'issued']
+      );
+      
+      if (updateResult.affectedRows === 0) {
+        await db.rollback();
+        return res.status(404).json({ error: 'Transaction not found or already returned' });
+      }
+      
+      // Get book_id to update availability
+      const [transactionCheck] = await db.execute(
+        'SELECT book_id FROM transactions WHERE id = ?',
+        [transaction_id]
+      );
+      
+      if (transactionCheck.length > 0) {
+        // Update book availability
+        await db.execute(
+          'UPDATE books SET available = available + 1 WHERE id = ?',
+          [transactionCheck[0].book_id]
+        );
+      }
+      
+      await db.commit();
+      
+      res.json({ 
+        message: 'Book returned successfully',
+        fine: fine || 0
+      });
+    } catch (error) {
+      await db.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error returning book:', error);
+    res.status(500).json({ error: 'Failed to return book' });
+  }
+});
+
+// Additional helpful endpoints
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const [totalBooks] = await db.execute('SELECT COUNT(*) as count FROM books');
+    const [totalMembers] = await db.execute('SELECT COUNT(*) as count FROM members WHERE status = "active"');
+    const [issuedBooks] = await db.execute('SELECT COUNT(*) as count FROM transactions WHERE status = "issued"');
+    const [overdueBooks] = await db.execute('SELECT COUNT(*) as count FROM transactions WHERE status = "issued" AND due_date < CURDATE()');
+    
+    res.json({
+      totalBooks: totalBooks[0].count,
+      totalMembers: totalMembers[0].count,
+      issuedBooks: issuedBooks[0].count,
+      overdueBooks: overdueBooks[0].count
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
+  }
+});
+
+app.get('/api/books/search', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { q } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    const [rows] = await db.execute(
+      'SELECT * FROM books WHERE title LIKE ? OR author LIKE ? OR isbn LIKE ? ORDER BY title',
+      [`%${q}%`, `%${q}%`, `%${q}%`]
+    );
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error searching books:', error);
+    res.status(500).json({ error: 'Failed to search books' });
+  }
+});
+
+app.get('/api/members/search', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const { q } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    const [rows] = await db.execute(
+      'SELECT * FROM members WHERE name LIKE ? OR email LIKE ? ORDER BY name',
+      [`%${q}%`, `%${q}%`]
+    );
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error searching members:', error);
+    res.status(500).json({ error: 'Failed to search members' });
   }
 });
 
