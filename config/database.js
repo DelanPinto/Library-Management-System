@@ -3,7 +3,7 @@ require('dotenv').config();
 
 // Create connection pool
 const pool = mysql.createPool({
-    host: '127.0.0.1',
+    host: process.env.DB_HOST || '127.0.0.1', // Use DB_HOST from environment variables, fallback to localhost
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
