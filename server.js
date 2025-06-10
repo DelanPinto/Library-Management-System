@@ -12,7 +12,7 @@ const app = express();
 
 // Railway-specific configuration
 const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0'; // Important: bind to all interfaces for Railway
+const HOST = '0.0.0.0';
 
 console.log('🚂 Railway Deployment Starting...');
 console.log('PORT:', PORT);
@@ -22,19 +22,26 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
 
-// Middleware
+// Trust proxy - IMPORTANT for Railway
+app.set('trust proxy', true);
+
+// Middleware - Order matters!
 app.use(cors({
-  origin: true, // Allow all origins for now
+  origin: true,
   credentials: true
 }));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rate limiting - more lenient for Railway
+// Rate limiting - applied only to API routes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200, // Increased limit
+  max: 200,
   message: {
     error: 'Too many requests from this IP, please try again later.'
   },
@@ -42,14 +49,21 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use('/api/', limiter);
+// CRITICAL: Health check endpoints FIRST - no middleware interference
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    port: PORT,
+    env: process.env.NODE_ENV || 'production'
+  });
+});
 
-// CRITICAL: Health check must be first and simple
 app.get('/', (req, res) => {
-  console.log('✅ Root endpoint accessed from:', req.ip);
   res.status(200).json({ 
     status: 'OK',
-    message: 'Library Management System is running',
+    message: 'Library Management System is running on Railway',
     timestamp: new Date().toISOString(),
     port: PORT,
     uptime: Math.floor(process.uptime()),
@@ -57,18 +71,12 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
-  console.log('✅ Health check accessed from:', req.ip);
-  res.status(200).json({ 
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime())
-  });
-});
+// Apply rate limiting only to API routes
+app.use('/api/', limiter);
 
-// Debug middleware - only for API routes
+// Request logging for API routes only
 app.use('/api/', (req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} from ${req.ip}`);
   next();
 });
 
@@ -99,14 +107,14 @@ app.get('/api/search', async (req, res) => {
       });
     }
 
-    // Call Google Books API
+    // Call Google Books API with shorter timeout for Railway
     const googleResponse = await axios.get('https://www.googleapis.com/books/v1/volumes', {
       params: {
         q: q,
         startIndex: startIndex,
         maxResults: maxResults
       },
-      timeout: 8000 // Reduced timeout for Railway
+      timeout: 5000 // Shorter timeout for Railway
     });
 
     const books = (googleResponse.data.items || []).map(item => {
@@ -154,8 +162,6 @@ app.get('/api/search', async (req, res) => {
 
 // Authentication endpoints
 app.post('/api/auth/login', (req, res) => {
-  console.log('🔐 Login attempt from:', req.ip);
-  
   const { email, password } = req.body;
   
   if (!email || !password) {
@@ -166,7 +172,6 @@ app.post('/api/auth/login', (req, res) => {
   }
   
   // Mock authentication
-  console.log('✅ Login successful for:', email);
   res.json({
     success: true,
     message: 'Login successful',
@@ -181,8 +186,6 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/register', (req, res) => {
-  console.log('📝 Register attempt from:', req.ip);
-  
   const { email, password, name } = req.body;
   
   if (!email || !password || !name) {
@@ -262,12 +265,20 @@ const staticRoutes = ['/login', '/register', '/user', '/admin'];
 staticRoutes.forEach(route => {
   app.get(route, (req, res) => {
     const fileName = route.substring(1) + '.html';
-    res.sendFile(path.join(__dirname, 'public', fileName), (err) => {
+    const filePath = path.join(__dirname, 'public', fileName);
+    res.sendFile(filePath, (err) => {
       if (err) {
+        console.error(`File not found: ${fileName}`);
         res.status(404).send(`
-          <h1>Page not found</h1>
-          <p>${fileName} not found in public folder</p>
-          <a href="/">Back to home</a>
+          <!DOCTYPE html>
+          <html>
+          <head><title>Page Not Found</title></head>
+          <body>
+            <h1>Page not found</h1>
+            <p>${fileName} not found in public folder</p>
+            <a href="/">Back to home</a>
+          </body>
+          </html>
         `);
       }
     });
@@ -283,36 +294,49 @@ app.all('/api/*', (req, res) => {
   });
 });
 
-// SPA fallback
+// SPA fallback - catch all other routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  res.sendFile(indexPath, (err) => {
     if (err) {
+      console.error('index.html not found');
       res.status(404).send(`
-        <h1>Page not found</h1>
-        <p>index.html not found in public folder</p>
-        <a href="/">Back to home</a>
+        <!DOCTYPE html>
+        <html>
+        <head><title>Library Management System</title></head>
+        <body>
+          <h1>Library Management System</h1>
+          <p>Welcome to the Library Management System</p>
+          <p>API is running on Railway</p>
+        </body>
+        </html>
       `);
     }
   });
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err.message);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
+  console.error('Stack:', err.stack);
+  
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+  }
 });
 
-// Start server - CRITICAL: Must bind to 0.0.0.0 for Railway
+// Start server - MUST bind to 0.0.0.0 for Railway
 const server = app.listen(PORT, HOST, () => {
   console.log(`✅ Server running on ${HOST}:${PORT}`);
   console.log(`✅ Environment: ${process.env.NODE_ENV || 'production'}`);
+  console.log(`✅ Health check available at: /health`);
   console.log(`✅ Ready to accept connections`);
 });
 
-// Handle server errors
+// Server error handling
 server.on('error', (err) => {
   console.error('❌ Server error:', err);
   if (err.code === 'EADDRINUSE') {
@@ -321,32 +345,42 @@ server.on('error', (err) => {
   }
 });
 
-// Graceful shutdown for Railway
+// Enhanced graceful shutdown for Railway
 const gracefulShutdown = (signal) => {
   console.log(`📍 ${signal} received, shutting down gracefully`);
-  server.close(() => {
-    console.log('📍 Server closed');
+  
+  // Stop accepting new connections
+  server.close((err) => {
+    if (err) {
+      console.error('❌ Error during server close:', err);
+      process.exit(1);
+    }
+    
+    console.log('📍 Server closed successfully');
     process.exit(0);
   });
   
   // Force close after 10 seconds
   setTimeout(() => {
-    console.log('📍 Forcing shutdown');
+    console.log('📍 Forcing shutdown after timeout');
     process.exit(1);
   }, 10000);
 };
 
+// Handle Railway signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught errors without crashing
+// Handle uncaught errors gracefully
 process.on('uncaughtException', (err) => {
   console.error('❌ Uncaught Exception:', err.message);
   console.error('Stack:', err.stack);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection:', reason);
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
 console.log('✅ Server setup complete - Railway ready');
