@@ -45,6 +45,6 @@ CREATE TABLE IF NOT EXISTS book_records (
 
 -- Insert default admin user (password: admin123)
 INSERT INTO users (name, email, password, role) 
-VALUES ('Admin', 'admin@library.com', '$2a$10$M357k.ALOLWtPmfdS/c3RuBgBNOtPy4JcEtzE6t1ST5b.OLKohLBe
+VALUES ('Admin', 'admin@library.com', '$2a$10$yAKF5Goo55qoxyLS9ypk1upra83jACowui/Z1QGQOxFFpMLX9rhry
 ', 'admin')
 ON DUPLICATE KEY UPDATE id=id; 
