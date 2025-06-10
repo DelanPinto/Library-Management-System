@@ -11,9 +11,6 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
-});
 
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
@@ -144,8 +141,8 @@ app.get('/api/search', async (req, res) => {
               title: volumeInfo?.title || 'Unknown Title',
               authors: volumeInfo?.authors || ['Unknown Author'],
               publishedDate: volumeInfo?.publishedDate || null,
-              description: volumeInfo?.description || null, // May need to handle description object
-               thumbnail: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
+              description: volumeInfo?.description || null,
+              thumbnail: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
               categories: volumeInfo?.categories || [],
               pageCount: volumeInfo?.pageCount || null,
               language: volumeInfo?.language || null,
@@ -230,10 +227,19 @@ app.use((req, res) => {
 });
 
 // Start the server
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   // Test database connection on startup
   testConnection();
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Please use a different port.`);
+    process.exit(1);
+  } else {
+    console.error('Server error:', err);
+  }
 });
 
 module.exports = app;
