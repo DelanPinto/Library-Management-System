@@ -18,7 +18,7 @@ const connection = mysql.createConnection({
   user: 'root',
   password: 'CFTKWWUzXBsUzfYudxWyyqRIPYLRdXOd',
   database: 'railway',
-  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306, // ✅ Add this
+  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 56484, // ✅ Add this
 });
 
 // Test database connection
