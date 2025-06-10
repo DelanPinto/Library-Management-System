@@ -1,4 +1,4 @@
-// server.js - Express backend with Google Books API
+// Fixed server.js for Railway deployment
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -10,117 +10,69 @@ require('dotenv').config();
 
 const app = express();
 
-// Debug: Log all environment variables related to ports
-console.log('Environment PORT:', process.env.PORT);
-console.log('All environment variables:', Object.keys(process.env).filter(key => key.includes('PORT')));
-
+// Railway-specific configuration
 const PORT = process.env.PORT || 3000;
-const DB_PORT = process.env.DB_PORT || 12760;
+const HOST = '0.0.0.0'; // Important: bind to all interfaces for Railway
 
-console.log('Using PORT:', PORT);
+console.log('🚂 Railway Deployment Starting...');
+console.log('PORT:', PORT);
+console.log('HOST:', HOST);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 
 // Initialize cache with 1 hour TTL
 const cache = new NodeCache({ stdTTL: 3600 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true, // Allow all origins for now
+  credentials: true
+}));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); // Add this for form data
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rate limiting - 100 requests per 15 minutes per IP
+// Rate limiting - more lenient for Railway
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 200, // Increased limit
   message: {
     error: 'Too many requests from this IP, please try again later.'
-  }
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 app.use('/api/', limiter);
 
-// Debug middleware to log requests
-app.use('/api/', (req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`, 
-    req.method === 'POST' ? { body: req.body } : { query: req.query });
-  next();
-});
-
-// Open Library API configuration
-const OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org';
-const OPEN_LIBRARY_COVERS_URL = 'https://covers.openlibrary.org/b';
-
-// Open Library utility functions
-function formatOpenLibraryResponse(works) {
-  return works.map(work => ({
-    id: work.key,
-    title: work.title || 'Unknown Title',
-    authors: work.author_name || ['Unknown Author'],
-    publishedDate: work.first_publish_year || null,
-    description: work.description || null,
-    thumbnail: work.cover_i ? `${OPEN_LIBRARY_COVERS_URL}/id/${work.cover_i}-M.jpg` : null,
-    categories: work.subject || [],
-    pageCount: work.number_of_pages_median || null,
-    language: work.language || null,
-    isbn: work.isbn ? work.isbn[0] : null,
-    publisher: work.publisher ? work.publisher[0] : null,
-    source: 'openlibrary'
-  }));
-}
-
-function formatOpenLibraryBookDetails(book) {
-  return {
-    id: book.key,
-    title: book.title || 'Unknown Title',
-    authors: book.authors ? book.authors.map(a => a.name) : ['Unknown Author'],
-    publishedDate: book.first_publish_date || null,
-    description: book.description || null,
-    thumbnail: book.covers ? `${OPEN_LIBRARY_COVERS_URL}/id/${book.covers[0]}-M.jpg` : null,
-    smallThumbnail: book.covers ? `${OPEN_LIBRARY_COVERS_URL}/id/${book.covers[0]}-S.jpg` : null,
-    categories: book.subjects || [],
-    pageCount: book.number_of_pages || null,
-    language: book.languages ? book.languages[0].key : null,
-    isbn: book.isbn_13 ? book.isbn_13[0] : (book.isbn_10 ? book.isbn_10[0] : null),
-    publisher: book.publishers ? book.publishers[0].name : null,
-    previewLink: book.preview_url || null,
-    infoLink: `${OPEN_LIBRARY_BASE_URL}${book.key}`,
-    source: 'openlibrary'
-  };
-}
-
-// Health check endpoint - MOVED TO TOP for Railway
+// CRITICAL: Health check must be first and simple
 app.get('/', (req, res) => {
+  console.log('✅ Root endpoint accessed from:', req.ip);
   res.status(200).json({ 
-    status: 'Library Management System is running',
+    status: 'OK',
+    message: 'Library Management System is running',
     timestamp: new Date().toISOString(),
     port: PORT,
-    availableEndpoints: [
-      'GET /',
-      'GET /health',
-      'GET /api/search',
-      'POST /api/auth/login',
-      'POST /api/auth/register',
-      'POST /api/auth/logout',
-      'GET /api/users/profile',
-      'GET /api/books',
-      'POST /api/books',
-      'GET /login',
-      'GET /register',
-      'GET /user',
-      'GET /admin'
-    ]
+    uptime: Math.floor(process.uptime()),
+    environment: process.env.NODE_ENV || 'production'
   });
 });
 
 app.get('/health', (req, res) => {
+  console.log('✅ Health check accessed from:', req.ip);
   res.status(200).json({ 
-    status: 'OK', 
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    port: PORT
+    uptime: Math.floor(process.uptime())
   });
 });
 
-// Main search endpoint - with better error handling
+// Debug middleware - only for API routes
+app.use('/api/', (req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Google Books API search endpoint
 app.get('/api/search', async (req, res) => {
   try {
     const { q, page = 0 } = req.query;
@@ -136,93 +88,62 @@ app.get('/api/search', async (req, res) => {
     
     const startIndex = pageNum * 10;
     const maxResults = 10;
-    const cacheKey = `search_google_${q}_${startIndex}_${maxResults}`;
+    const cacheKey = `search_${q}_${startIndex}`;
     
     // Check cache first
     const cachedResult = cache.get(cacheKey);
     if (cachedResult) {
       return res.json({
-        books: cachedResult.books,
-        totalPages: Math.ceil((cachedResult.totalItems || 0) / maxResults),
-        currentPage: pageNum,
-        totalItems: cachedResult.totalItems,
-        source: 'googlebooks',
+        ...cachedResult,
         fromCache: true
       });
     }
 
-    let books = [];
-    let totalItems = 0;
+    // Call Google Books API
+    const googleResponse = await axios.get('https://www.googleapis.com/books/v1/volumes', {
+      params: {
+        q: q,
+        startIndex: startIndex,
+        maxResults: maxResults
+      },
+      timeout: 8000 // Reduced timeout for Railway
+    });
 
-    try {
-      const googleResponse = await axios.get('https://www.googleapis.com/books/v1/volumes', {
-        params: {
-          q: q,
-          startIndex: startIndex,
-          maxResults: maxResults
-        },
-        timeout: 10000
-      });
-
-      console.log('Google Books API response status:', googleResponse.status);
-      console.log('Google Books API response items count:', googleResponse.data.items?.length || 0);
-
-      books = (googleResponse.data.items || []).map(item => {
-        const volumeInfo = item.volumeInfo;
-        return {
-          id: item.id,
-          title: volumeInfo?.title || 'Unknown Title',
-          authors: volumeInfo?.authors || ['Unknown Author'],
-          publishedDate: volumeInfo?.publishedDate || null,
-          description: volumeInfo?.description || null,
-          thumbnail: volumeInfo?.imageLinks?.thumbnail || volumeInfo?.imageLinks?.smallThumbnail || null,
-          categories: volumeInfo?.categories || [],
-          pageCount: volumeInfo?.pageCount || null,
-          language: volumeInfo?.language || null,
-          isbn: volumeInfo?.industryIdentifiers ? volumeInfo.industryIdentifiers.find(id => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier : null,
-          publisher: volumeInfo?.publisher || null,
-          source: 'googlebooks'
-        };
-      });
-
-      totalItems = googleResponse.data.totalItems || 0;
-
-    } catch (apiError) {
-      console.error('Google Books API error:', apiError.response?.data || apiError.message);
-      // Return empty results instead of throwing error
-      return res.json({
-        books: [],
-        totalPages: 0,
-        currentPage: pageNum,
-        totalItems: 0,
-        source: 'googlebooks',
-        error: 'Google Books API temporarily unavailable'
-      });
-    }
+    const books = (googleResponse.data.items || []).map(item => {
+      const volumeInfo = item.volumeInfo;
+      return {
+        id: item.id,
+        title: volumeInfo?.title || 'Unknown Title',
+        authors: volumeInfo?.authors || ['Unknown Author'],
+        publishedDate: volumeInfo?.publishedDate || null,
+        description: volumeInfo?.description || null,
+        thumbnail: volumeInfo?.imageLinks?.thumbnail || null,
+        categories: volumeInfo?.categories || [],
+        pageCount: volumeInfo?.pageCount || null,
+        language: volumeInfo?.language || null,
+        isbn: volumeInfo?.industryIdentifiers ? 
+          volumeInfo.industryIdentifiers.find(id => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier : null,
+        publisher: volumeInfo?.publisher || null,
+        source: 'googlebooks'
+      };
+    });
 
     const result = {
       books: books,
-      totalItems: totalItems,
-      source: 'googlebooks',
-      query: q.trim(),
-      startIndex: startIndex,
-      maxResults: maxResults
+      totalPages: Math.ceil((googleResponse.data.totalItems || 0) / maxResults),
+      currentPage: pageNum,
+      totalItems: googleResponse.data.totalItems || 0,
+      source: 'googlebooks'
     };
 
     // Cache the result
     cache.set(cacheKey, result);
+    res.json(result);
 
-    res.json({
-      books: result.books,
-      totalPages: Math.ceil((result.totalItems || 0) / maxResults),
-      currentPage: pageNum,
-      totalItems: result.totalItems,
-      source: result.source
-    });
   } catch (error) {
-    console.error('Search error:', error);
+    console.error('Search error:', error.message);
     res.status(500).json({ 
-      error: 'Internal server error',
+      error: 'Search service temporarily unavailable',
       books: [],
       totalPages: 0,
       currentPage: 0,
@@ -231,26 +152,21 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Authentication API endpoints (built-in fallbacks)
+// Authentication endpoints
 app.post('/api/auth/login', (req, res) => {
-  console.log('=== LOGIN ATTEMPT ===');
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
-  console.log('Content-Type:', req.get('Content-Type'));
+  console.log('🔐 Login attempt from:', req.ip);
   
   const { email, password } = req.body;
   
   if (!email || !password) {
-    console.log('Missing email or password');
     return res.status(400).json({
       success: false,
-      message: 'Email and password are required',
-      received: { email: !!email, password: !!password }
+      message: 'Email and password are required'
     });
   }
   
-  // Mock authentication - replace with real logic later
-  console.log('Login successful for:', email);
+  // Mock authentication
+  console.log('✅ Login successful for:', email);
   res.json({
     success: true,
     message: 'Login successful',
@@ -265,21 +181,17 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/register', (req, res) => {
-  console.log('=== REGISTER ATTEMPT ===');
-  console.log('Body:', req.body);
+  console.log('📝 Register attempt from:', req.ip);
   
   const { email, password, name } = req.body;
   
   if (!email || !password || !name) {
     return res.status(400).json({
       success: false,
-      message: 'All fields (email, password, name) are required',
-      received: { email: !!email, password: !!password, name: !!name }
+      message: 'All fields are required'
     });
   }
   
-  // Mock registration - replace with real logic later
-  console.log('Registration successful for:', email);
   res.json({
     success: true,
     message: 'Registration successful',
@@ -293,16 +205,14 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  console.log('=== LOGOUT ATTEMPT ===');
   res.json({
     success: true,
     message: 'Logout successful'
   });
 });
 
-// User API endpoints (built-in fallbacks)
+// User endpoints
 app.get('/api/users/profile', (req, res) => {
-  console.log('=== PROFILE REQUEST ===');
   res.json({
     success: true,
     user: {
@@ -315,21 +225,16 @@ app.get('/api/users/profile', (req, res) => {
   });
 });
 
-// Books API endpoints (built-in fallbacks)
+// Books endpoints
 app.get('/api/books', (req, res) => {
-  console.log('=== BOOKS LIST REQUEST ===');
   res.json({
     success: true,
     books: [],
-    message: 'No books in library yet',
     totalBooks: 0
   });
 });
 
 app.post('/api/books', (req, res) => {
-  console.log('=== ADD BOOK REQUEST ===');
-  console.log('Body:', req.body);
-  
   const { title, authors, isbn } = req.body;
   
   if (!title) {
@@ -352,186 +257,98 @@ app.post('/api/books', (req, res) => {
   });
 });
 
-// Try to load external routes (if they exist)
-try {
-  const authRoutes = require('./routes/auth');
-  app.use('/api/auth', authRoutes);
-  console.log('✅ External auth routes loaded');
-} catch (routeError) {
-  console.log('ℹ️  External auth routes not found, using built-in endpoints');
-}
-
-try {
-  const bookRoutes = require('./routes/books');
-  app.use('/api/books', bookRoutes);
-  console.log('✅ External book routes loaded');
-} catch (routeError) {
-  console.log('ℹ️  External book routes not found, using built-in endpoints');
-}
-
-try {
-  const userRoutes = require('./routes/users');
-  app.use('/api/users', userRoutes);
-  console.log('✅ External user routes loaded');
-} catch (routeError) {
-  console.log('ℹ️  External user routes not found, using built-in endpoints');
-}
-
 // Serve static HTML files
-app.get('/login', (req, res) => {
-  console.log('Login page requested');
-  res.sendFile(path.join(__dirname, 'public', 'login.html'), (err) => {
-    if (err) {
-      console.error('Error serving login.html:', err);
-      res.status(404).send(`
-        <h1>Login page not found</h1>
-        <p>Please make sure login.html exists in the public folder</p>
-        <a href="/">Back to home</a>
-      `);
-    }
+const staticRoutes = ['/login', '/register', '/user', '/admin'];
+staticRoutes.forEach(route => {
+  app.get(route, (req, res) => {
+    const fileName = route.substring(1) + '.html';
+    res.sendFile(path.join(__dirname, 'public', fileName), (err) => {
+      if (err) {
+        res.status(404).send(`
+          <h1>Page not found</h1>
+          <p>${fileName} not found in public folder</p>
+          <a href="/">Back to home</a>
+        `);
+      }
+    });
   });
 });
 
-app.get('/register', (req, res) => {
-  console.log('Register page requested');
-  res.sendFile(path.join(__dirname, 'public', 'register.html'), (err) => {
-    if (err) {
-      console.error('Error serving register.html:', err);
-      res.status(404).send(`
-        <h1>Register page not found</h1>
-        <p>Please make sure register.html exists in the public folder</p>
-        <a href="/">Back to home</a>
-      `);
-    }
-  });
-});
-
-app.get('/user', (req, res) => {
-  console.log('User page requested');
-  res.sendFile(path.join(__dirname, 'public', 'user.html'), (err) => {
-    if (err) {
-      console.error('Error serving user.html:', err);
-      res.status(404).send(`
-        <h1>User page not found</h1>
-        <p>Please make sure user.html exists in the public folder</p>
-        <a href="/">Back to home</a>
-      `);
-    }
-  });
-});
-
-app.get('/admin', (req, res) => {
-  console.log('Admin page requested');
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'), (err) => {
-    if (err) {
-      console.error('Error serving admin.html:', err);
-      res.status(404).send(`
-        <h1>Admin page not found</h1>
-        <p>Please make sure admin.html exists in the public folder</p>
-        <a href="/">Back to home</a>
-      `);
-    }
-  });
-});
-
-// Catch-all for API routes that don't exist
+// API 404 handler
 app.all('/api/*', (req, res) => {
-  console.log('API route not found:', req.method, req.path);
   res.status(404).json({ 
     error: 'API endpoint not found',
     path: req.path,
-    method: req.method,
-    availableEndpoints: [
-      'GET /api/search',
-      'POST /api/auth/login',
-      'POST /api/auth/register',
-      'POST /api/auth/logout',
-      'GET /api/users/profile',
-      'GET /api/books',
-      'POST /api/books'
-    ]
+    method: req.method
   });
 });
 
-// Catch-all for SPA routing
+// SPA fallback
 app.get('*', (req, res) => {
-  console.log('Serving index.html for:', req.path);
   res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
     if (err) {
-      console.error('Error serving index.html:', err);
       res.status(404).send(`
         <h1>Page not found</h1>
-        <p>Please make sure index.html exists in the public folder</p>
+        <p>index.html not found in public folder</p>
         <a href="/">Back to home</a>
       `);
     }
   });
 });
 
-// Global error handler
+// Error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
+  console.error('❌ Unhandled error:', err.message);
   res.status(500).json({ 
     error: 'Internal server error',
-    message: err.message,
-    timestamp: new Date().toISOString()
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
   });
 });
 
-// Start the server with better error handling
-const server = app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✅ Health check: http://localhost:${PORT}/health`);
-  
-  // Test database connection on startup (with error handling)
-  try {
-    // Only test if database config exists
-    const { testConnection } = require('./config/database');
-    await testConnection();
-    console.log('✅ Database connection test completed');
-  } catch (dbError) {
-    console.log('ℹ️  Database connection not configured or failed - continuing without DB');
-  }
+// Start server - CRITICAL: Must bind to 0.0.0.0 for Railway
+const server = app.listen(PORT, HOST, () => {
+  console.log(`✅ Server running on ${HOST}:${PORT}`);
+  console.log(`✅ Environment: ${process.env.NODE_ENV || 'production'}`);
+  console.log(`✅ Ready to accept connections`);
 });
 
+// Handle server errors
 server.on('error', (err) => {
+  console.error('❌ Server error:', err);
   if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use. Please use a different port.`);
+    console.error(`❌ Port ${PORT} is already in use`);
     process.exit(1);
-  } else {
-    console.error('❌ Server error:', err);
   }
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('📍 SIGTERM received, shutting down gracefully');
+// Graceful shutdown for Railway
+const gracefulShutdown = (signal) => {
+  console.log(`📍 ${signal} received, shutting down gracefully`);
   server.close(() => {
     console.log('📍 Server closed');
     process.exit(0);
   });
-});
+  
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.log('📍 Forcing shutdown');
+    process.exit(1);
+  }, 10000);
+};
 
-process.on('SIGINT', () => {
-  console.log('📍 SIGINT received, shutting down gracefully');
-  server.close(() => {
-    console.log('📍 Server closed');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
+// Handle uncaught errors without crashing
 process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-  process.exit(1);
+  console.error('❌ Uncaught Exception:', err.message);
+  console.error('Stack:', err.stack);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  console.error('❌ Unhandled Rejection:', reason);
 });
 
-console.log('✅ Server setup complete');
+console.log('✅ Server setup complete - Railway ready');
 
 module.exports = app;
