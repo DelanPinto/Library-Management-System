@@ -19,7 +19,7 @@ const dbConfig = {
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
   database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'library_db',
   connectTimeout: 60000,
-  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false // Removed invalid options
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 };
 
 let db;
@@ -45,7 +45,8 @@ app.get('/health', (req, res) => {
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     env: NODE_ENV,
-    port: PORT
+    port: PORT,
+    database: db ? 'connected' : 'disconnected'
   });
 });
 
@@ -92,6 +93,20 @@ async function connectToDatabase() {
 // Initialize database tables
 async function initializeDatabase() {
   try {
+    // Create users table for authentication
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'librarian', 'user') DEFAULT 'user',
+        status ENUM('active', 'inactive') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create books table
     await db.execute(`
       CREATE TABLE IF NOT EXISTS books (
@@ -140,6 +155,17 @@ async function initializeDatabase() {
       )
     `);
 
+    // Insert default admin user if not exists
+    const [existingAdmin] = await db.execute('SELECT id FROM users WHERE username = ? OR email = ?', ['admin', 'admin@library.com']);
+    
+    if (existingAdmin.length === 0) {
+      await db.execute(
+        'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+        ['admin', 'admin@library.com', 'admin123', 'admin']
+      );
+      console.log('✅ Default admin user created');
+    }
+
     console.log('✅ Database tables initialized successfully');
   } catch (error) {
     console.error('❌ Error initializing database:', error.message);
@@ -147,7 +173,182 @@ async function initializeDatabase() {
   }
 }
 
-// API Routes
+// Authentication endpoints
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Username and password are required' 
+      });
+    }
+    
+    if (db) {
+      // Check database for user
+      try {
+        const [users] = await db.execute(
+          'SELECT * FROM users WHERE (username = ? OR email = ?) AND status = ?',
+          [username, username, 'active']
+        );
+        
+        if (users.length > 0 && users[0].password === password) {
+          const user = users[0];
+          return res.json({
+            success: true,
+            message: 'Login successful',
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              role: user.role
+            },
+            token: `token_${Date.now()}_${user.id}`
+          });
+        }
+      } catch (dbError) {
+        console.error('Database error during login:', dbError);
+      }
+    }
+    
+    // Fallback to hardcoded credentials
+    const validCredentials = [
+      { username: 'admin', password: 'admin123', role: 'admin', email: 'admin@library.com' },
+      { username: 'librarian', password: 'lib123', role: 'librarian', email: 'librarian@library.com' },
+      { username: 'user', password: 'user123', role: 'user', email: 'user@library.com' }
+    ];
+    
+    const user = validCredentials.find(
+      cred => (cred.username === username || cred.email === username) && cred.password === password
+    );
+    
+    if (user) {
+      res.json({
+        success: true,
+        message: 'Login successful',
+        user: {
+          id: Date.now(),
+          username: user.username,
+          email: user.email,
+          role: user.role
+        },
+        token: `token_${Date.now()}`
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid username or password'
+      });
+    }
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Login failed due to server error'
+    });
+  }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password, email, role } = req.body;
+    
+    if (!username || !password || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, password, and email are required'
+      });
+    }
+    
+    if (db) {
+      try {
+        // Check if user already exists
+        const [existingUsers] = await db.execute(
+          'SELECT id FROM users WHERE username = ? OR email = ?',
+          [username, email]
+        );
+        
+        if (existingUsers.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: 'Username or email already exists'
+          });
+        }
+        
+        // Insert new user
+        const [result] = await db.execute(
+          'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+          [username, email, password, role || 'user']
+        );
+        
+        return res.status(201).json({
+          success: true,
+          message: 'Registration successful',
+          user: {
+            id: result.insertId,
+            username,
+            email,
+            role: role || 'user'
+          }
+        });
+      } catch (dbError) {
+        console.error('Database error during registration:', dbError);
+        if (dbError.code === 'ER_DUP_ENTRY') {
+          return res.status(409).json({
+            success: false,
+            message: 'Username or email already exists'
+          });
+        }
+      }
+    }
+    
+    // Fallback response if database is not available
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful (database unavailable - using fallback)',
+      user: {
+        id: Date.now(),
+        username,
+        email,
+        role: role || 'user'
+      }
+    });
+  } catch (error) {
+    console.error('Error during registration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Registration failed due to server error'
+    });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logout successful'
+  });
+});
+
+// Legacy authentication endpoints (for backward compatibility)
+app.post('/api/login', async (req, res) => {
+  // Redirect to new endpoint
+  req.url = '/api/auth/login';
+  return app._router.handle(req, res);
+});
+
+app.post('/api/register', async (req, res) => {
+  // Redirect to new endpoint  
+  req.url = '/api/auth/register';
+  return app._router.handle(req, res);
+});
+
+app.post('/api/logout', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logout successful'
+  });
+});
 
 // Books endpoints
 app.get('/api/books', async (req, res) => {
@@ -239,95 +440,6 @@ app.post('/api/members', async (req, res) => {
       res.status(500).json({ error: 'Failed to add member' });
     }
   }
-});
-
-// Authentication endpoints
-app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username and password are required' 
-      });
-    }
-    
-    // Simple authentication - you can replace this with your actual logic
-    // For demo purposes, using hardcoded credentials
-    const validCredentials = [
-      { username: 'admin', password: 'admin123', role: 'admin' },
-      { username: 'librarian', password: 'lib123', role: 'librarian' },
-      { username: 'user', password: 'user123', role: 'user' }
-    ];
-    
-    const user = validCredentials.find(
-      cred => cred.username === username && cred.password === password
-    );
-    
-    if (user) {
-      res.json({
-        success: true,
-        message: 'Login successful',
-        user: {
-          id: Date.now(), // Simple ID generation
-          username: user.username,
-          role: user.role
-        },
-        token: `token_${Date.now()}` // Simple token generation
-      });
-    } else {
-      res.status(401).json({
-        success: false,
-        message: 'Invalid username or password'
-      });
-    }
-  } catch (error) {
-    console.error('Error during login:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Login failed due to server error'
-    });
-  }
-});
-
-app.post('/api/register', async (req, res) => {
-  try {
-    const { username, password, email, role } = req.body;
-    
-    if (!username || !password || !email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username, password, and email are required'
-      });
-    }
-    
-    // For demo purposes, just return success
-    // In a real app, you'd save to a users table
-    res.status(201).json({
-      success: true,
-      message: 'Registration successful',
-      user: {
-        id: Date.now(),
-        username,
-        email,
-        role: role || 'user'
-      }
-    });
-  } catch (error) {
-    console.error('Error during registration:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Registration failed due to server error'
-    });
-  }
-});
-
-app.post('/api/logout', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Logout successful'
-  });
 });
 
 // Transaction endpoints
@@ -551,12 +663,23 @@ app.use((error, req, res, next) => {
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+  console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Endpoint not found',
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
-// Graceful shutdown
+// Graceful shutdown - Modified for Railway
 function gracefulShutdown(signal) {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  
+  // Set a timeout to force exit if graceful shutdown takes too long
+  const shutdownTimeout = setTimeout(() => {
+    console.log('❌ Forced shutdown due to timeout');
+    process.exit(1);
+  }, 10000); // 10 seconds timeout
   
   if (server) {
     server.close(async () => {
@@ -571,10 +694,12 @@ function gracefulShutdown(signal) {
         }
       }
       
+      clearTimeout(shutdownTimeout);
       console.log('✅ Graceful shutdown complete');
       process.exit(0);
     });
   } else {
+    clearTimeout(shutdownTimeout);
     process.exit(0);
   }
 }
@@ -618,7 +743,7 @@ async function startServer() {
       console.log('✅ Ready to accept connections');
     });
     
-    // Keep the process alive
+    // Handle server errors
     server.on('error', (error) => {
       console.error('❌ Server error:', error);
       if (error.code === 'EADDRINUSE') {
@@ -627,15 +752,15 @@ async function startServer() {
       }
     });
     
+    // Keep the server alive
+    server.keepAliveTimeout = 120000; // 2 minutes
+    server.headersTimeout = 120000; // 2 minutes
+    
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }
-
-// Import and register auth routes
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
 
 // Start the application
 startServer();
