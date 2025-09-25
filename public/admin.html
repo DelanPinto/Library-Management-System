@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Library Management System</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="grid-styles.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="/admin.js" defer></script>
+    <script src="carousel.js" defer></script>
+    <script src="book-search.js" defer></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">Library Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" data-page="search">Search Books</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="books">All Books</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="users">Users</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="borrowed">Book Records</a>
+                    </li>
+                </ul>
+                <button class="btn btn-light" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <!-- Search Books Section -->
+        <div id="searchSection" class="content-section">
+            <div class="search-hero">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-12 col-md-10 col-lg-8">
+                            <h2 class="search-title text-center mb-4">
+                                <i class="fas fa-book-reader"></i>
+                                Search Digital Library
+                            </h2>
+                            <div class="search-box-container">
+                                <div class="search-box">
+                                    <div class="search-input-group">
+                                        <div class="search-icon">
+                                            <i class="fas fa-search"></i>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            id="searchInput" 
+                                            class="search-input" 
+                                            placeholder="Search by title, author, or ISBN..."
+                                            autofocus
+                                            autocomplete="off"
+                                        >
+                                        <button class="search-button" id="searchButton" title="Search">
+                                            <i class="fas fa-search"></i>
+                                            <span>Search</span>
+                                        </button>
+                                    </div>
+                                    <div class="search-hints">
+                                        <span class="hint-text">Popular searches:</span>
+                                        <button class="hint-tag" onclick="document.getElementById('searchInput').value='fiction'">Fiction</button>
+                                        <button class="hint-tag" onclick="document.getElementById('searchInput').value='science'">Science</button>
+                                        <button class="hint-tag" onclick="document.getElementById('searchInput').value='history'">History</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="container">
+                <div id="loadingSpinner" class="loading-overlay" style="display: none;">
+                    <div class="loading-spinner"></div>
+                </div>
+                
+                <div class="books-section-header">
+                <h2 class="books-section-title">Search Results</h2>
+            </div>
+            <div class="books-carousel">
+                <button class="carousel-button prev" onclick="scrollBooks('prev')">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="searchResults" class="books-grid">
+                    <!-- Search results will be displayed here -->
+                </div>
+                <button class="carousel-button next" onclick="scrollBooks('next')">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+                
+                <div id="adminSearchPagination" class="pagination-container"></div>
+            </div>
+        </div>
+        <!-- All Books Section -->
+        <div id="booksSection" class="content-section d-none">
+            <h2>All Books in Library</h2>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Authors</th>
+                            <th>Total Copies</th>
+                            <th>Available</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="booksList"></tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Users Section -->
+        <div id="usersSection" class="content-section d-none">
+            <h2>Registered Users</h2>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersList">
+                        <!-- Placeholder for user details -->
+                        <tr>
+                            <td colspan="4">No user details available.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Borrowed Books Section -->
+        <div id="borrowedSection" class="content-section d-none">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Record ID</th>
+                            <th>User Name</th>
+                            <th>Book Title</th>
+                            <th>Author</th>
+                            <th>Request Type</th>
+                            <th>Borrow Date</th>
+                            <th>Due Date</th>
+                            <th>Return Date</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="borrowedList"></tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Return Requests Section -->
+        <div id="returnRequestsSection" class="content-section d-none">
+            <h2>Pending Return Requests</h2>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Book</th>
+                            <th>Request Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="returnRequestsList"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- Add Book Modal -->
+    <div class="modal fade" id="addBookModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Book to Library</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">                    <form id="addBookForm">
+                        <input type="hidden" id="googleBookId">
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" class="form-control" id="bookTitle" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Authors</label>
+                            <input type="text" class="form-control" id="bookAuthors" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Number of Copies</label>
+                            <input type="number" class="form-control" id="bookCopies" min="1" value="1" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addBookToLibrary()">Add Book</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View User Books Modal -->
+    <div class="modal fade" id="viewUserBooksModal" tabindex="-1" aria-labelledby="viewUserBooksModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewUserBooksModalLabel">Borrowed Books for User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="userBorrowedBooksList">
+                        <!-- Borrowed books will be loaded here -->
+                    </div>
+                     <div id="userBooksLoadingSpinner" class="loading" style="display: none;">🔄 Loading user books...</div>
+                     <div id="userBooksError" class="alert alert-danger" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/script.js"></script>
+    <script>
+        // Store the selected book object globally
+        let selectedBookForAdd = null;
+
+        function showAddBookModal(bookId, title, authors) {
+            // Find the book object from the last search results (if available)
+            // For simplicity, store the book object in window.lastSearchBooks in displaySearchResults
+            if (window.lastSearchBooks) {
+                selectedBookForAdd = window.lastSearchBooks.find(b => b.id === bookId);
+            } else {
+                selectedBookForAdd = null;
+            }
+            document.getElementById('googleBookId').value = bookId;
+            document.getElementById('bookTitle').value = title;
+            document.getElementById('bookAuthors').value = authors;
+            const modal = new bootstrap.Modal(document.getElementById('addBookModal'));
+            modal.show();
+        }
+
+        async function addBookToLibrary() {
+            const googleBookId = document.getElementById('googleBookId').value;
+            if (!googleBookId) {
+                alert('Please select a book to add.');
+                return;
+            }
+            const copies = document.getElementById('bookCopies').value;
+            if (!selectedBookForAdd) {
+                alert('Book details not found. Please search and select again.');
+                return;
+            }
+            // Extract required fields for backend
+            const volumeInfo = selectedBookForAdd.volumeInfo || selectedBookForAdd;
+            const payload = {
+                title: volumeInfo.title || selectedBookForAdd.title || '',
+                authors: volumeInfo.authors || selectedBookForAdd.authors || [],
+                publisher: volumeInfo.publisher || selectedBookForAdd.publisher || '',
+                thumbnail: (volumeInfo.imageLinks && (volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail)) || selectedBookForAdd.thumbnail || '',
+                googleBookId: googleBookId,
+                total_copies: parseInt(copies),
+                available_copies: parseInt(copies)
+            };
+            try {
+                await apiRequest('/api/books/add', 'POST', payload);
+                bootstrap.Modal.getInstance(document.getElementById('addBookModal')).hide();
+                loadAllBooks();
+                alert('Book added successfully!');
+            } catch (error) {
+                console.error('Add book error:', error);
+                const errorMessage = error.response?.data?.error || error.message || 'Unknown error';
+                if (errorMessage.includes('already in the library')) {
+                    alert('This book is already in the library.');
+                } else if (errorMessage.includes('Service Unavailable') || errorMessage.includes('Error fetching book details')) {
+                    alert('Unable to fetch book details. Please try again later.');
+                } else {
+                    alert('Error adding book: ' + errorMessage);
+                }
+            }
+        }
+
+        // Patch displaySearchResults to store last search results for modal use
+        function displaySearchResults(books) {
+            window.lastSearchBooks = books;
+            // ...existing code...
+            console.log('displaySearchResults called with books:', books);
+            const container = document.getElementById('searchResults');
+            if (!Array.isArray(books) || books.length === 0) {
+                console.log('No books array or empty books array.');
+                container.innerHTML = `
+                    <div class="no-results">
+                        <div class="no-results-icon"><i class="fas fa-book-open"></i></div>
+                        <div class="no-results-text">No books found</div>
+                        <div class="no-results-suggestion">Try different keywords or check the spelling</div>
+                    </div>`;
+                return;
+            }
+            
+            console.log('Rendering books:', books.length);
+            container.innerHTML = books.map(book => {
+                const volumeInfo = book.volumeInfo || book;
+                const thumbnail = (volumeInfo.imageLinks && (volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail)) || 
+                                book.thumbnail || 
+                                '/images/no-cover.png';
+                
+                const authorText = Array.isArray(volumeInfo.authors) 
+                    ? volumeInfo.authors.join(', ') 
+                    : (volumeInfo.authors || book.authors || 'Unknown Author');
+                
+                const titleText = volumeInfo.title || book.title || 'Unknown Title';
+                const publisherText = volumeInfo.publisher || book.publisher || 'Unknown Publisher';
+                
+                return `
+                    <div class="book-card">
+                        <div class="book-image-container">
+                            <img src="${thumbnail}" 
+                                alt="${titleText}" 
+                                class="book-image"
+                                onerror="this.onerror=null; this.src='/images/no-cover.png';">
+                        </div>
+                        <div class="book-info">
+                            <h3 class="book-title" title="${titleText}">${titleText}</h3>
+                            <p class="book-author">
+                                <i class="fas fa-user-edit"></i> ${authorText}
+                            </p>
+                            <p class="book-publisher">
+                                <i class="fas fa-building"></i> ${publisherText}
+                            </p>
+                            <div class="book-action">
+                                <button class="add-to-library-btn" onclick="showAddBookModal('${book.id}', '${titleText.replace(/'/g, "\\'")}', '${authorText.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-plus"></i>
+                                    Add to Library
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        async function loadAllBooks(searchQuery = '') {
+            try {
+                let books = [];
+                if (searchQuery) {
+                    // Use Open Library API only for search
+                    try {
+                        const res = await apiRequest(`/api/books/search?q=${encodeURIComponent(searchQuery)}`);
+                        books = res.data && res.data.books ? res.data.books : (res.data ? res.data : []);
+                    } catch (err) {
+                        console.error('Search error:', err);
+                        books = [];
+                    }
+                } else {
+                    // Use local database for all books
+                    try {
+                        const res = await apiRequest('/api/books/all');
+                        books = Array.isArray(res.data) ? res.data : [];
+                    } catch (err) {
+                        console.error('Load books error:', err);
+                        books = [];
+                    }
+                }
+
+                const tbody = document.getElementById('booksList');
+                if (!Array.isArray(books) || books.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No books found in the library.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = books.map(book => `
+                    <tr>
+                        <td>${book.title || 'No Title'}</td>
+                        <td>${Array.isArray(book.authors) ? book.authors.join(', ') : (book.authors || 'Unknown')}</td>
+                        <td>${book.total_copies !== undefined ? book.total_copies : '-'}</td>
+                        <td>${book.available_copies !== undefined ? book.available_copies : '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteBook('${book.id}')">Delete</button>
+                            <button class="btn btn-sm btn-primary" onclick="editBookCopies('${book.id}')">Edit</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Load books error:', error);
+                const tbody = document.getElementById('booksList');
+                tbody.innerHTML = '<tr><td colspan="5">Error loading books. Please try again later.</td></tr>';
+            }
+        }
+        async function loadUsers() {
+            const tbody = document.getElementById('usersList');
+            if (!tbody) {
+                console.error('Users list tbody element not found');
+                return;
+            }
+
+            // Show loading state
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading users...</p>
+                    </td>
+                </tr>`;
+
+            try {
+                console.log('Fetching users from /api/users/all');
+                const response = await apiRequest('/api/users/all');
+                console.log('Users API Response:', response);
+
+                // Validate response structure
+                if (!response || !response.success || !response.data || !response.data.users) {
+                    throw new Error('Invalid response from server');
+                }
+
+                const users = response.data.users;
+                if (!Array.isArray(users)) {
+                    throw new Error('Users data is not an array');
+                }
+
+                if (users.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center">
+                                <div class="text-muted">
+                                    <i class="fas fa-users fa-2x mb-3"></i>
+                                    <p>No users found in the system</p>
+                                </div>
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                // Map over the users array
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.name || 'N/A'}</td>
+                        <td>${user.email || 'N/A'}</td>
+                        <td>
+                            <span class="badge ${user.role === 'admin' ? 'bg-danger' : 'bg-primary'}">
+                                ${user.role || 'user'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info" onclick="viewUserBooks(${user.id})">
+                                <i class="fas fa-book me-1"></i> View Books
+                            </button>
+                            ${user.role !== 'admin' ? `
+                                <button class="btn btn-sm btn-warning ms-1" onclick="editUser(${user.id})">
+                                    <i class="fas fa-user-edit"></i> Edit Role
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading users:', error);
+                tbody.innerHTML = '<tr><td colspan="4">Error loading users. Please try again later.</td></tr>';
+            }
+        }
+
+        async function loadBorrowedBooks() {
+            try {
+                const res = await apiRequest('/api/books/borrowed');
+                const tbody = document.getElementById('borrowedList');
+                if (!Array.isArray(res.data && res.data.records)) {
+                    tbody.innerHTML = '<tr><td colspan="5">Error loading borrowed books. Please try again later.</td></tr>';
+                    return;
+                }
+                // Filter out returned books and only show active borrows and pending returns
+                const activeRecords = res.data.records.filter(record => 
+                    record.status === 'approved' || record.status === 'pending' || record.status === 'return_pending' || record.status === 'borrow_pending'
+                );
+                tbody.innerHTML = activeRecords.map(record => {
+                    const issueDate = record.issue_date ? new Date(record.issue_date).toLocaleDateString() : 'N/A';
+                    const returnDueDate = record.return_due_date ? new Date(record.return_due_date).toLocaleDateString() : 'N/A';
+                    const actualReturnDate = record.actual_return_date ? new Date(record.actual_return_date).toLocaleDateString() : 'N/A';
+                    const statusText = record.status === 'approved' ? 'Approved' : 
+                                      record.status === 'pending' ? 'Pending' : 
+                                      record.status === 'return_pending' ? '<span style="color: green;">Return Request Sent</span>' : 
+                                      record.status === 'borrow_pending' ? '<span style="color: green;">Borrow Request Sent</span>' : '';
+                    return `
+                        <tr>
+                            <td>${record.id}</td>
+                            <td>${record.user_name}</td>
+                            <td>${record.book_title}</td>
+                            <td>${record.author}</td>
+                            <td>${record.request_type}</td>
+                            <td>${issueDate}</td>
+                            <td>${returnDueDate}</td>
+                            <td>${actualReturnDate}</td>
+                            <td>${statusText}</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" onclick="deleteBook('${record.id}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Load borrowed books error:', error);
+                const tbody = document.getElementById('borrowedList');
+                tbody.innerHTML = '<tr><td colspan="5">Error loading borrowed books. Please try again later.</td></tr>';
+            }
+        }
+        async function deleteBook(bookId) {
+            if (!confirm('Are you sure you want to delete this book?')) return;
+            try {
+                await apiRequest(`/api/books/${bookId}`, 'DELETE');
+                loadAllBooks();
+                alert('Book deleted successfully!');
+            } catch (error) {
+                console.error('Delete book error:', error);
+                alert('Error deleting book');
+            }
+        }
+        async function returnBook(recordId) {
+            try {
+                await apiRequest(`/api/books/return/${recordId}`, 'POST');
+                loadBorrowedBooks();
+                alert('Book returned successfully!');
+            } catch (error) {
+                console.error('Return book error:', error);
+                alert('Error returning book');
+            }
+        }
+        function viewUserBooks(userId) {
+            alert('View user books functionality to be implemented');
+        }
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login.html';
+        }
+        async function handleBorrowRequest(recordId, action) {
+            if (!confirm(`Are you sure you want to ${action} this borrow request?`)) return;
+            
+            try {
+                await apiRequest(`/api/books/borrow-request/${recordId}`, 'POST', { action });
+                loadBorrowedBooks();
+                alert(`Borrow request ${action}ed successfully!`);
+            } catch (error) {
+                console.error('Handle borrow request error:', error);
+                alert(error.message || `Error ${action}ing borrow request`);
+            }
+        }
+        
+        // Add event listener for search button
+        document.addEventListener('DOMContentLoaded', () => {
+            // Search button click event
+            const searchButton = document.getElementById('searchButton');
+            if (searchButton) {
+                searchButton.addEventListener('click', () => {
+                    searchBooks();
+                });
+            }
+
+            // Enter key press in search input
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        searchBooks();
+                    }
+                });
+
+                // Add input event listener for real-time validation (only disables/enables button, never input)
+                searchInput.addEventListener('input', (event) => {
+                    const query = event.target.value.trim();
+                    const searchButton = document.getElementById('searchButton');
+                    if (!query) {
+                        searchButton.disabled = true;
+                        searchButton.style.opacity = '0.7';
+                        searchInput.classList.remove('is-valid');
+                    } else {
+                        searchButton.disabled = false;
+                        searchButton.style.opacity = '1';
+                        searchInput.classList.add('is-valid');
+                    }
+                });
+                // Ensure input is always enabled
+                searchInput.disabled = false;
+                // Trigger input event to set initial state
+                searchInput.dispatchEvent(new Event('input'));
+            }
+
+            // Add keyboard shortcut (Ctrl/Cmd + /)
+            document.addEventListener('keydown', (event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === '/') {
+                    event.preventDefault();
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput) {
+                        searchInput.focus();
+                    }
+                }
+            });
+
+            // Add hint tag click handlers
+            document.querySelectorAll('.hint-tag').forEach(tag => {
+                tag.addEventListener('click', () => {
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput) {
+                        searchInput.value = tag.textContent;
+                        searchInput.focus();
+                        searchBooks();
+                    }
+                });
+            });
+        });
+    </script>
+    <style>
+        /* Page Layout */
+        .header { text-align: center; margin-bottom: 30px; }
+        .subtitle { color: #764ba2; font-size: 1.2rem; margin-bottom: 18px; }
+
+        /* Search Hero Section */
+        .search-hero {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            padding: 3rem 0;
+            margin: -1.5rem -15px 2rem;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-title {
+            color: white;
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-title i {
+            margin-right: 12px;
+        }
+
+        /* Search Box */
+        .search-box-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            padding: 1.5rem;
+        }
+
+        .search-box {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .search-input-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 8px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .search-input-group:focus-within {
+            background: white;
+            box-shadow: 0 0 0 2px #764ba2;
+        }
+
+        .search-icon {
+            color: #764ba2;
+            font-size: 1.2rem;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            padding: 8px;
+            color: #2d3748;
+        }
+
+        .search-input:focus {
+            outline: none;
+        }
+
+        .search-input::placeholder {
+            color: #a0aec0;
+        }
+
+        .search-button {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+        }
+
+        .search-button i {
+            font-size: 0.9em;
+        }
+
+        /* Search Hints */
+        .search-hints {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            flex-wrap: wrap;
+        }
+
+        .hint-text {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .hint-tag {
+            background: #f7f7f7;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .hint-tag:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+            transform: translateY(-1px);
+        }
+
+        /* Loading States */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            border-radius: 16px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #764ba2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Pagination */
+        .page-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 0 4px;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            color: #4a5568;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .page-btn:hover {
+            background-color: #edf2f7;
+            color: #2d3748;
+            transform: translateY(-1px);
+        }
+
+        .page-btn.active {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .search-hero {
+                padding: 2rem 0;
+                margin: -1rem -15px 1.5rem;
+            }
+
+            .search-title {
+                font-size: 1.5rem;
+            }
+
+            .search-box-container {
+                padding: 1rem;
+            }
+
+            .search-input-group {
+                flex-direction: column;
+                gap: 8px;
+                padding: 8px;
+            }
+
+            .search-button {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .search-hints {
+                justify-content: center;
+            }
+        }
+    </style>
+</body>
+</html>

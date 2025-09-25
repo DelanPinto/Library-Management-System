@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Digital Library</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+        }
+        .user-container {
+            max-width: 1200px;
+            margin: 60px auto 0 auto;
+            background: rgba(255,255,255,0.97);
+            border-radius: 18px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.13);
+            padding: 40px 36px 36px 36px;
+            position: relative;
+        }
+        
+        .user-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .user-header h1 {
+            font-size: 2.3rem;
+            color: #4a5568;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+        .user-header p {
+            color: #764ba2;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+        .tabs {
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .tab {
+            padding: 12px 28px;
+            border-radius: 8px 8px 0 0;
+            background: #f7fafc;
+            color: #764ba2;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            font-size: 1rem;
+        }
+        .tab.active, .tab:hover {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.2);
+        }
+        .content-section {
+            background: #fff;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 2px 8px rgba(102,126,234,0.07);
+            padding: 28px 18px;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .search-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .search-input {
+            flex-grow: 1;
+            flex-shrink: 1;
+            padding: 12px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .search-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+            outline: none;
+        }
+        .search-container .btn {
+            flex-grow: 0;
+            flex-shrink: 0;
+            width: 110px;
+            padding: 12px 15px;
+            font-size: 1rem;
+            text-align: center;
+        }
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.2);
+        }
+
+        .book-meta {
+            flex: 1;
+        }
+
+        .borrow-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: 0.5rem;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            letter-spacing: 0.01em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .borrow-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(118, 75, 162, 0.2);
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+
+        .borrow-button i {
+            font-size: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .borrow-button:hover i {
+            transform: translateY(-1px);
+        }
+
+        .book-card:hover .borrow-button {
+            box-shadow: 0 6px 16px rgba(118, 75, 162, 0.25);
+        }
+
+        .book-image-container::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 100%);
+            pointer-events: none;
+        }
+        .books-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2.5rem;
+            padding: 2.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        @media (max-width: 1024px) {
+            .books-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 2rem;
+                padding: 2rem;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .books-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+                padding: 1.5rem;
+            }
+        }
+
+        .book-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: grid;
+            grid-template-rows: auto 1fr;
+            position: relative;
+            height: 100%;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .book-card.overdue {
+            border-color: #FC8181;
+            box-shadow: 0 4px 16px rgba(252, 129, 129, 0.2);
+        }
+
+        .book-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(118, 75, 162, 0.15);
+            border-color: rgba(118, 75, 162, 0.2);
+        }
+
+                .book-image-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 2/3;
+            background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .book-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.1));
+            border-radius: 6px;
+        }
+
+        .overdue-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #FC8181;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        .book-card:hover .book-image {
+            transform: scale(1.05);
+        }
+
+        .book-info {
+            padding: 1rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .book-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2d3748;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 0.25rem;
+        }
+
+        .book-author {
+            color: #764ba2;
+            font-size: 0.95rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .book-status-container {
+            margin: 0.5rem 0;
+        }
+
+        .book-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            line-height: 1;
+            background: #f0f0f0;
+        }
+
+        .status-borrowed {
+            background: #C6F6D5;
+            color: #2F855A;
+        }
+
+        .status-pending {
+            background: #FEEBC8;
+            color: #C05621;
+        }
+
+        .status-returned {
+            background: #E9D8FD;
+            color: #553C9A;
+        }
+
+        /* Borrowed Books Styles */
+        .borrowed-status {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 2;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(118, 75, 162, 0.9);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(118, 75, 162, 0.2);
+        }
+
+        .status-badge i {
+            font-size: 0.875rem;
+        }
+
+        .borrow-details {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.25rem;
+            background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+            border-radius: 16px;
+            margin: 1rem 0;
+        }
+
+        .date-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .date-item i {
+            color: #764ba2;
+            font-size: 1.125rem;
+            opacity: 0.9;
+        }
+
+        .date-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .date-label {
+            color: #64748b;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .date-value {
+            color: #1e293b;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .return-button {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: 0.5rem;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+        }
+
+        .return-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+
+        .return-button i {
+            font-size: 1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .return-button:hover i {
+            transform: rotate(-45deg);
+        }
+
+        .book-meta {
+            margin-bottom: 0.5rem;
+        }
+
+        .days-remaining {
+            font-size: 0.85rem;
+            color: #48BB78;
+            margin-top: 0.2rem;
+        }
+
+        .days-remaining.due-soon {
+            color: #ECC94B;
+        }
+
+        .days-remaining.overdue {
+            color: #FC8181;
+        }
+
+        .return-btn {
+            background: #764ba2;
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: auto;
+        }
+
+        .return-btn:hover {
+            background: #553C9A;
+            transform: translateY(-2px);
+        }
+
+        .pending-message {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: #FEEBC8;
+            color: #C05621;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-top: auto;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .book-info {
+                padding: 1rem;
+            }
+
+            .book-dates {
+                padding: 0.75rem;
+            }
+
+            .book-image {
+                height: 200px;
+            }
+        }
+        .status-available {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+        .status-borrowed {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        .pagination {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 30px;
+            padding: 15px 0;
+            width: 100%;
+            background: #fff;
+            border-top: 1px solid #e2e8f0;
+            position: relative;
+            z-index: 1;
+        }
+        .page-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: #e2e8f0;
+            color: #764ba2;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 40px;
+            text-align: center;
+        }
+        .page-btn.active, .page-btn:hover {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.2);
+        }
+        .loading {
+            text-align: center;
+            color: #764ba2;
+            font-size: 1.1rem;
+            margin: 20px 0;
+        }
+        .books-grid .pagination {
+            grid-column: 1 / -1;
+            margin-top: 20px;
+            padding: 15px 0;
+            background: #fff;
+            border-top: 1px solid #e2e8f0;
+        }
+        .no-results {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px 20px;
+            color: #718096;
+            font-size: 1.1rem;
+            background: #f7fafc;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .top-right {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none; /* Removed border */
+        }
+        .top-right:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.2);
+        }
+        .btn {
+            margin-top: auto;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="user-container">
+        <button id="logoutButton" class="top-right" onclick="logout()">Logout</button>
+        <div class="user-header">
+            <h1>Welcome to Your Library</h1>
+            <p>Search, manage, and borrow books with ease.</p>
+        </div>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('search', event)">🔍 Search Books</div>
+            
+            <div class="tab" onclick="switchTab('borrowed', event)">📋 Borrowed Books</div>
+        </div>
+        <div class="content-section">
+            <div id="searchTab">
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search for books by title, author, or keyword...">
+                    <button onclick="performSearch()" class="btn">Search</button>
+                </div>
+                <div id="loadingSpinner" class="loading" style="display: none;">🔄 Searching books...</div>
+                <div id="searchResults" class="books-grid"></div>
+                <div id="searchPagination" class="pagination"></div>
+            </div>
+            
+            <div id="borrowedTab" style="display: none;">
+                <div id="borrowedBooks" class="books-grid">
+                    <!-- Borrowed books will be dynamically loaded here -->
+                </div>
+                <div id="borrowedPagination" class="pagination"></div>
+            </div>
+        </div>
+    </div>
+    <script src="/script.js"></script>
+    <script src="/user.js"></script>
+    <script>
+        // Set items per page to match 3x3 grid layout
+        const ITEMS_PER_PAGE = 9;
+
+async function performSearch(page = 0) {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                alert('⚠️ Please enter a search term');
+                return;
+            }
+            
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const searchResults = document.getElementById('searchResults');
+            
+            try {
+                loadingSpinner.style.display = 'block';
+                searchResults.innerHTML = '';
+                
+                console.log('Searching with query:', query, 'page:', page, 'limit:', ITEMS_PER_PAGE);
+                const response = await apiRequest(`/api/books/search?q=${encodeURIComponent(query)}&page=${page}&limit=${ITEMS_PER_PAGE}`);
+                console.log('Search response:', response);
+                
+                loadingSpinner.style.display = 'none';
+
+                if (!response) {
+                    throw new Error('No response received from server');
+                }
+
+                if (!response.books) {
+                    console.error('Invalid response format:', response);
+                    throw new Error('Invalid response format from server');
+                }
+
+                if (response.books.length === 0) {
+                    searchResults.innerHTML = '<div class="no-results">📭 No books found. Try different keywords!</div>';
+                    return;
+                }
+
+                // Display the books
+                displaySearchResults(response.books);
+
+                // Setup pagination if we have total items
+                if (response.totalItems !== undefined) {
+                    setupPagination(
+                        'searchPagination',
+                        page,
+                        response.totalItems,
+                        'performSearch'
+                    );
+                }
+
+            } catch (error) {
+                console.error('Search error:', error);
+                loadingSpinner.style.display = 'none';
+                searchResults.innerHTML = `
+                    <div class="no-results">
+                        <p>🚫 Error searching books. ${error.message}</p>
+                        <button class="btn mt-3" onclick="performSearch(${page})">Try Again</button>
+                    </div>`;
+            }
+        }
+
+        function setupPagination(containerId, currentPage, totalItems, onPageChange) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+            
+            let startPage = Math.max(0, currentPage - 1);
+            let endPage = Math.min(totalPages - 1, startPage + 2);
+            
+            if (endPage - startPage < 2) {
+                startPage = Math.max(0, endPage - 2);
+            }
+
+            if (currentPage > 0) {
+                const prevButton = document.createElement('button');
+                prevButton.className = 'page-btn';
+                prevButton.onclick = () => window[onPageChange](currentPage - 1);
+                prevButton.textContent = '←';
+                container.appendChild(prevButton);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                pageButton.onclick = () => window[onPageChange](i);
+                pageButton.textContent = i + 1;
+                container.appendChild(pageButton);
+            }
+
+            if (currentPage < totalPages - 1) {
+                const nextButton = document.createElement('button');
+                nextButton.className = 'page-btn';
+                nextButton.onclick = () => window[onPageChange](currentPage + 1);
+                nextButton.textContent = '→';
+                container.appendChild(nextButton);
+            }
+        }
+
+        function displaySearchResults(books) {
+            if (!books || !Array.isArray(books)) {
+                console.error('Invalid books data:', books);
+                document.getElementById('searchResults').innerHTML = '<div class="no-results">🚫 Error displaying books.</div>';
+                return;
+            }
+
+            const container = document.getElementById('searchResults');
+            
+            // Filter out books with 0 available copies
+            const availableBooks = books.filter(book => book.available_copies > 0);
+            
+            if (availableBooks.length === 0) {
+                container.innerHTML = '<div class="no-results">📚 No available books found.</div>';
+                return;
+            }
+            
+            container.innerHTML = availableBooks.map(book => {
+                if (!book || !book.volumeInfo) {
+                    console.error('Invalid book data:', book);
+                    return '';
+                }
+                
+                // Get volumeInfo from the book data
+                const volumeInfo = book.volumeInfo;
+
+                // Create display data for available books
+                const displayData = {
+                    id: book.id,
+                    title: volumeInfo?.title || 'Unknown Title',
+                    authors: volumeInfo?.authors || ['Unknown Author'],
+                    thumbnail: volumeInfo?.imageLinks?.thumbnail || 
+                              volumeInfo?.imageLinks?.smallThumbnail || 
+                              `/images/no-cover.png`,
+                    description: volumeInfo?.description || '',
+                    publisher: volumeInfo?.publisher || '',
+                    publishedDate: volumeInfo?.publishedDate || '',
+                    total_copies: book.total_copies || 0,
+                    available_copies: book.available_copies || 0,
+                    isInLocalLibrary: true // All books shown are from local library
+                };
+
+                // Set status for available books
+                const statusText = `Available (${displayData.available_copies}/${displayData.total_copies})`;
+                const statusClass = 'status-available';
+                const buttonText = 'Request Borrow';
+                const buttonDisabled = '';
+                
+                // Handle book IDs for API calls
+                const apiBookId = book.localDbId || book.id;
+                const buttonId = `borrow-btn-${book.id}`;
+
+                console.log('Processed book details:', {
+                    title: displayData.title,
+                    authors: displayData.authors,
+                    isAvailable: displayData.isAvailable,
+                    isInLocalLibrary: displayData.isInLocalLibrary,
+                    availableCopies: displayData.availableCopies,
+                    totalCopies: displayData.totalCopies,
+                    apiBookId,
+                    buttonId
+                });
+                
+                return `
+                    <div class="book-card" id="book-${displayData.id}">
+                        <div class="book-image-container">
+                            <img src="${displayData.thumbnail}" 
+                                alt="${displayData.title}" 
+                                class="book-image" 
+                                onerror="this.src='/images/no-cover.png'">
+                        </div>
+                        <div class="book-info">
+                            <div class="book-meta">
+                                <h3 class="book-title">${displayData.title}</h3>
+                                <p class="book-author">
+                                    <i class="fas fa-feather"></i>
+                                    ${Array.isArray(displayData.authors) ? displayData.authors.join(', ') : displayData.authors}
+                                </p>
+                            </div>
+                            <button class="borrow-button" 
+                                    onclick="requestBorrow('${displayData.id}', '${apiBookId}')" 
+                                    id="${buttonId}">
+                                <i class="fas fa-bookmark"></i>
+                                <span>Borrow Book</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function requestBorrow(bookId, apiBookId) {
+            const button = document.getElementById(`borrow-btn-${bookId}`);
+            if (!button) {
+                console.error('Borrow button not found');
+                return;
+            }
+
+            const originalText = button.innerHTML;
+            try {
+                showLoading(button);
+
+                const response = await apiRequest(`/api/books/borrow/${apiBookId}`, 'POST');
+                console.log('Borrow response:', response);
+
+                if (response.message) {
+                    button.innerHTML = 'Request Pending';
+                    button.disabled = true;
+                    button.style.backgroundColor = '#718096';
+                    showSuccess(response.message);
+                    // Refresh the search results to update book availability
+                    performSearch(currentSearchPage);
+                } else {
+                    throw new Error(response.error || 'Failed to submit borrow request');
+                }
+            } catch (error) {
+                console.error('Borrow request error:', error);
+                showError(error.message || 'Error submitting borrow request');
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+
+        function getActionButton(record) {
+            if (record.status === 'approved') {
+                return `<button class="btn" onclick="returnBook('${record.book_id}')">Return Book</button>`;
+            } else if (record.status === 'returned') {
+                return `<p class="book-status">Returned on: ${new Date(record.return_date).toLocaleDateString()}</p>`;
+            }
+            return '';
+        }
+
+        async function displayBorrowedBooks() {
+            try {
+                const container = document.getElementById('borrowedBooks');
+                container.innerHTML = '<div class="loading">Loading borrowed books...</div>';
+
+                const response = await apiRequest(`/api/books/borrowed`);
+                console.log('Borrowed books response:', response);
+
+                if (!response || !response.books) {
+                    console.error('Unexpected response structure:', response);
+                    throw new Error('Unable to fetch borrowed books');
+                }
+
+                const books = response.books;
+                console.log('Books data:', books);
+
+                if (!Array.isArray(books)) {
+                    console.error('Unexpected books data structure:', books);
+                    container.innerHTML = '<div class="no-results">🚫 Error loading borrowed books. Please try again later.</div>';
+                    return;
+                }
+
+                // Filter active borrowed books
+                const activeBorrows = books.filter(book => 
+                    book.status === 'approved' || 
+                    book.status === 'borrowed' ||
+                    (book.status === 'pending' && book.action_type === 'return')
+                );
+
+                if (activeBorrows.length === 0) {
+                    container.innerHTML = '<div class="no-results">📚 You have not borrowed any books yet.</div>';
+                    return;
+                }
+
+                // Display books
+                container.innerHTML = activeBorrows.map(book => {
+                    console.log('Processing book:', book);
+
+                    // Extract book information
+                    console.log('Book data for display:', book);
+                    
+                    // Extract book information
+                    const bookTitle = book.title || book.book_title || 'No Title';
+                    const bookAuthors = Array.isArray(book.authors) ? book.authors.join(', ') : 
+                        (typeof book.authors === 'string' ? JSON.parse(book.authors).join(', ') : 'Unknown Author');
+                    
+                    // Get thumbnail URL
+                    let thumbnailUrl = book.thumbnail;
+                    if (!thumbnailUrl) {
+                        // If no thumbnail, use Google Books API URL format
+                        thumbnailUrl = book.google_books_id ? 
+                            `https://books.google.com/books/content?id=${book.google_books_id}&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs-api` :
+                            '/images/no-cover.png';
+                    }
+                    
+                    // Use the current book as the borrow record since we've already filtered for active borrows
+                    const borrowRecord = book;
+                    console.log('Processing borrow record:', borrowRecord);
+
+                    return `
+                        <div class="book-card">
+                            <div class="book-image-container">
+                                <img src="${thumbnailUrl}" 
+                                    alt="${bookTitle}" 
+                                    class="book-image"
+                                    onerror="this.src='/images/no-cover.png'"
+                                    loading="lazy">
+                            </div>
+                            <div class="book-info">
+                                <div class="book-meta">
+                                    <h3 class="book-title">${bookTitle}</h3>
+                                    <p class="book-author"><i class="fas fa-feather"></i> ${bookAuthors}</p>
+                                </div>
+                                <div class="borrow-details">
+                                    <div class="date-item">
+                                        <i class="fas fa-calendar-check"></i>
+                                        <div class="date-info">
+                                            <span class="date-label">Borrowed</span>
+                                            <span class="date-value">${new Date(borrowRecord?.issue_date || borrowRecord?.request_date).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                    ${borrowRecord?.return_due_date ? `
+                                        <div class="date-item">
+                                            <i class="fas fa-calendar-times"></i>
+                                            <div class="date-info">
+                                                <span class="date-label">Due Date</span>
+                                                <span class="date-value">${new Date(borrowRecord.return_due_date).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div class="book-action">
+                                    <button class="return-button" onclick="returnBook('${book.book_id}')">
+                                        <i class="fas fa-undo-alt"></i>
+                                        <span>Return Book</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error displaying borrowed books:', error);
+                document.getElementById('borrowedBooks').innerHTML = `
+                    <div class="no-results">
+                        <p>😕 Unable to load your borrowed books.</p>
+                        <button class="btn" onclick="displayBorrowedBooks()">Try Again</button>
+                    </div>
+                `;
+            }
+        }
+
+        async function returnBook(bookId) {
+            if (!confirm('Would you like to request to return this book? An administrator will need to approve your request.')) return;
+            
+            console.log('Attempting to return book with ID:', bookId); // Debug log
+            
+            try {
+                await apiRequest(`/api/books/return/${bookId}`, 'POST');
+                alert('Return request submitted successfully! An administrator will review your request.');
+                displayBorrowedBooks(); // Refresh the borrowed books list
+            } catch (error) {
+                console.error('Return book error:', error);
+                alert(error.message || 'Error submitting return request');
+            }
+        }
+
+        function switchTab(tab, event) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            if (event && event.target) event.target.classList.add('active');
+            
+            document.getElementById('searchTab').style.display = tab === 'search' ? 'block' : 'none';
+            document.getElementById('borrowedTab').style.display = tab === 'borrowed' ? 'block' : 'none';
+            
+            if (tab === 'borrowed') {
+                // Defer displayBorrowedBooks call slightly to allow DOM to update
+                setTimeout(() => {
+                    displayBorrowedBooks();
+                }, 0);
+            }
+        }
+    </script>
+</body>
+</html>

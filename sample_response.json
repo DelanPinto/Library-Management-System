@@ -1,0 +1,104 @@
+{
+  "kind": "books#volumes",
+  "totalItems": 1000000,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "JPDOSzE7Bo0C",
+      "etag": "9Zwbbe6zoKg",
+      "selfLink": "https://www.googleapis.com/books/v1/volumes/JPDOSzE7Bo0C",
+      "volumeInfo": {
+        "title": "A Game of Thrones (A Song of Ice and Fire, Book 1)",
+        "authors": [
+          "George R.R. Martin"
+        ],
+        "publisher": "HarperCollins UK",
+        "publishedDate": "2010-12-23",
+        "description": "HBO’s hit series A GAME OF THRONES is based on George R. R. Martin’s internationally bestselling series A SONG OF ICE AND FIRE, the greatest fantasy epic of the modern age. A GAME OF THRONES is the first volume in the series.",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9780007378425"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "0007378424"
+          }
+        ],
+        "readingModes": {
+          "text": true,
+          "image": false
+        },
+        "pageCount": 833,
+        "printType": "BOOK",
+        "categories": [
+          "Fiction"
+        ],
+        "averageRating": 4,
+        "ratingsCount": 233,
+        "maturityRating": "NOT_MATURE",
+        "allowAnonLogging": true,
+        "contentVersion": "7.35.29.0.preview.2",
+        "panelizationSummary": {
+          "containsEpubBubbles": false,
+          "containsImageBubbles": false
+        },
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=JPDOSzE7Bo0C&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=JPDOSzE7Bo0C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en",
+        "previewLink": "http://books.google.co.in/books?id=JPDOSzE7Bo0C&printsec=frontcover&dq=Game+of+Thrones&hl=&cd=1&source=gbs_api",
+        "infoLink": "https://play.google.com/store/books/details?id=JPDOSzE7Bo0C&source=gbs_api",
+        "canonicalVolumeLink": "https://play.google.com/store/books/details?id=JPDOSzE7Bo0C"
+      },
+      "saleInfo": {
+        "country": "IN",
+        "saleability": "FOR_SALE",
+        "isEbook": true,
+        "listPrice": {
+          "amount": 392,
+          "currencyCode": "INR"
+        },
+        "retailPrice": {
+          "amount": 274.4,
+          "currencyCode": "INR"
+        },
+        "buyLink": "https://play.google.com/store/books/details?id=JPDOSzE7Bo0C&rdid=book-JPDOSzE7Bo0C&rdot=1&source=gbs_api",
+        "offers": [
+          {
+            "finskyOfferType": 1,
+            "listPrice": {
+              "amountInMicros": 392000000,
+              "currencyCode": "INR"
+            },
+            "retailPrice": {
+              "amountInMicros": 274400000,
+              "currencyCode": "INR"
+            }
+          }
+        ]
+      },
+      "accessInfo": {
+        "country": "IN",
+        "viewability": "PARTIAL",
+        "embeddable": false,
+        "publicDomain": false,
+        "textToSpeechPermission": "ALLOWED",
+        "epub": {
+          "isAvailable": true,
+          "acsTokenLink": "http://books.google.co.in/books/download/A_Game_of_Thrones_A_Song_of_Ice_and_Fire-sample-epub.acsm?id=JPDOSzE7Bo0C&format=epub&output=acs4_fulfillment_token&dl_type=sample&source=gbs_api"
+        },
+        "pdf": {
+          "isAvailable": false
+        },
+        "webReaderLink": "http://play.google.com/books/reader?id=JPDOSzE7Bo0C&hl=&source=gbs_api",
+        "accessViewStatus": "SAMPLE",
+        "quoteSharingAllowed": false
+      },
+      "searchInfo": {
+        "textSnippet": "HBO’s hit series A GAME OF THRONES is based on George R. R. Martin’s internationally bestselling series A SONG OF ICE AND FIRE, the greatest fantasy epic of the modern age. A GAME OF THRONES is the first volume in the series."
+      }
+    }
+  ]
+}

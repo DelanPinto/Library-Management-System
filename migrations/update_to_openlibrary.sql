@@ -1,0 +1,2 @@
+-- DEPRECATED: This migration is no longer needed. The project now uses only google_books_id as the external identifier for books.
+-- ALTER TABLE books CHANGE COLUMN google_book_id open_library_id VARCHAR(255) NOT NULL UNIQUE;
